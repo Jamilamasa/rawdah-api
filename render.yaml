@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: rawdah-api
+    env: go
+    plan: starter
+    buildCommand: go build -o rawdah-api ./cmd/api
+    startCommand: ./rawdah-api
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: ENV
+        value: production
