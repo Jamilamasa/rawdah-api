@@ -73,8 +73,12 @@ func (h *RantHandler) Get(c *gin.Context) {
 	password := c.GetHeader("X-Rant-Password")
 
 	rant, err := h.svc.Get(c.Request.Context(), id, userID, password)
+	if err == services.ErrRantWrongPassword {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "incorrect password"})
+		return
+	}
 	if err == services.ErrRantLocked {
-		// Return rant metadata without content
+		// No password supplied — return metadata only
 		c.JSON(http.StatusOK, gin.H{
 			"id":         rant.ID,
 			"title":      rant.Title,

@@ -24,12 +24,16 @@ type AvailableGame struct {
 }
 
 var AvailableGames = []AvailableGame{
-	{ID: "arabic_letters", Name: "Arabic Letters", Type: "islamic", Icon: "🔤", Desc: "Learn and practice Arabic alphabet"},
-	{ID: "quran_word_match", Name: "Quran Word Match", Type: "islamic", Icon: "📖", Desc: "Match Quran words with their meanings"},
-	{ID: "prophet_names", Name: "Prophet Names", Type: "islamic", Icon: "⭐", Desc: "Learn the names of prophets"},
-	{ID: "islamic_puzzle", Name: "Islamic Puzzle", Type: "islamic", Icon: "🧩", Desc: "Fun Islamic themed puzzles"},
-	{ID: "memory_match", Name: "Memory Match", Type: "general", Icon: "🃏", Desc: "Classic memory card matching game"},
-	{ID: "math_challenge", Name: "Math Challenge", Type: "general", Icon: "🔢", Desc: "Fun math problems"},
+	{ID: "names-match", Name: "99 Names", Type: "islamic", Icon: "✨", Desc: "Match the 99 Beautiful Names of Allah"},
+	{ID: "wudu-steps", Name: "Wudu Steps", Type: "islamic", Icon: "💧", Desc: "Learn the correct steps of wudu in order"},
+	{ID: "prophet-match", Name: "Prophet Match", Type: "islamic", Icon: "🌟", Desc: "Match prophets with their stories and miracles"},
+	{ID: "prophets-timeline", Name: "Prophets Timeline", Type: "islamic", Icon: "📅", Desc: "Arrange prophets in the correct chronological order"},
+	{ID: "prayer-quiz", Name: "Prayer Quiz", Type: "islamic", Icon: "🕌", Desc: "Test your knowledge of Salah and its pillars"},
+	{ID: "arabic-letters", Name: "Arabic Letters", Type: "islamic", Icon: "🔤", Desc: "Learn and practise the Arabic alphabet"},
+	{ID: "memory-match", Name: "Memory Match", Type: "general", Icon: "🃏", Desc: "Classic memory card matching game"},
+	{ID: "maths-challenge", Name: "Maths Challenge", Type: "general", Icon: "🔢", Desc: "Fun maths problems to solve"},
+	{ID: "typing-speed", Name: "Typing Speed", Type: "general", Icon: "⌨️", Desc: "Test and improve your typing speed"},
+	{ID: "colour-pattern", Name: "Colour Pattern", Type: "general", Icon: "🎨", Desc: "Memorise and repeat colour patterns"},
 }
 
 type GameService struct {
@@ -153,9 +157,9 @@ func (s *GameService) ListSessions(ctx context.Context, familyID, userID string)
 	return s.gameRepo.ListSessions(ctx, familyID, userID)
 }
 
-func isValidGame(name, gameType string) bool {
+func isValidGame(slug, gameType string) bool {
 	for _, g := range AvailableGames {
-		if g.Name == name && g.Type == gameType {
+		if g.ID == slug && g.Type == gameType {
 			return true
 		}
 	}

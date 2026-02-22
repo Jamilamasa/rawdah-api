@@ -21,11 +21,11 @@ type Config struct {
 	RefreshTokenTTL  time.Duration
 	ChildTokenTTL    time.Duration
 
-	R2AccountID       string
-	R2AccessKeyID     string
-	R2SecretAccessKey string
-	R2Bucket          string
-	R2PublicURL       string
+	R2AccountID           string
+	R2AccessKeyID         string
+	R2SecretAccessKey     string
+	R2Bucket              string
+	PresignExpiresSeconds int
 
 	BrevoAPIKey      string
 	BrevoSenderEmail string
@@ -55,6 +55,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("CHILD_TOKEN_TTL", "4h")
 	viper.SetDefault("OPENROUTER_MODEL", "google/gemma-2-9b-it")
 	viper.SetDefault("OPENROUTER_FALLBACK_MODEL", "mistralai/mistral-7b-instruct")
+	viper.SetDefault("PRESIGN_EXPIRES_SECONDS", 600)
 
 	accessTTL, err := time.ParseDuration(viper.GetString("ACCESS_TOKEN_TTL"))
 	if err != nil {
@@ -93,11 +94,11 @@ func Load() (*Config, error) {
 		RefreshTokenTTL:  refreshTTL,
 		ChildTokenTTL:    childTTL,
 
-		R2AccountID:       viper.GetString("R2_ACCOUNT_ID"),
-		R2AccessKeyID:     viper.GetString("R2_ACCESS_KEY_ID"),
-		R2SecretAccessKey: viper.GetString("R2_SECRET_ACCESS_KEY"),
-		R2Bucket:          viper.GetString("R2_BUCKET"),
-		R2PublicURL:       viper.GetString("R2_PUBLIC_URL"),
+		R2AccountID:           viper.GetString("R2_ACCOUNT_ID"),
+		R2AccessKeyID:         viper.GetString("R2_ACCESS_KEY_ID"),
+		R2SecretAccessKey:     viper.GetString("R2_SECRET_ACCESS_KEY"),
+		R2Bucket:              viper.GetString("R2_BUCKET"),
+		PresignExpiresSeconds: viper.GetInt("PRESIGN_EXPIRES_SECONDS"),
 
 		BrevoAPIKey:      viper.GetString("BREVO_API_KEY"),
 		BrevoSenderEmail: viper.GetString("BREVO_SENDER_EMAIL"),
@@ -145,6 +146,9 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Env == "production" && len(cfg.AllowedOrigins) == 0 {
 		errs = append(errs, "ALLOWED_ORIGINS is required in production")
+	}
+	if cfg.PresignExpiresSeconds <= 0 {
+		errs = append(errs, "PRESIGN_EXPIRES_SECONDS must be > 0")
 	}
 
 	if len(errs) > 0 {

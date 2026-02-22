@@ -1,26 +1,33 @@
 package storage
 
 import (
-	"bytes"
 	"context"
+	"errors"
 	"fmt"
-	"image"
-	_ "image/jpeg"
-	_ "image/png"
+	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/disintegration/imaging"
+	"github.com/aws/smithy-go"
 	"github.com/google/uuid"
 	appconfig "github.com/rawdah/rawdah-api/internal/config"
 )
 
 type R2Client struct {
-	client    *s3.Client
-	bucket    string
-	publicURL string
+	client        *s3.Client
+	presignClient *s3.PresignClient
+	bucket        string
+	presignTTL    time.Duration
+}
+
+var ErrObjectNotFound = errors.New("object not found")
+
+type ObjectMetadata struct {
+	SizeBytes   int64
+	ContentType string
 }
 
 func NewR2Client(cfg *appconfig.Config) (*R2Client, error) {
@@ -38,69 +45,96 @@ func NewR2Client(cfg *appconfig.Config) (*R2Client, error) {
 
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(r2Endpoint)
+		o.UsePathStyle = true
 	})
 
 	return &R2Client{
-		client:    client,
-		bucket:    cfg.R2Bucket,
-		publicURL: cfg.R2PublicURL,
+		client:        client,
+		presignClient: s3.NewPresignClient(client),
+		bucket:        cfg.R2Bucket,
+		presignTTL:    time.Duration(cfg.PresignExpiresSeconds) * time.Second,
 	}, nil
 }
 
-// UploadAvatar resizes to 256x256, converts to webp-like jpeg, and uploads.
-func (r *R2Client) UploadAvatar(ctx context.Context, familyID, userID string, fileBytes []byte, contentType string) (string, error) {
-	img, _, err := image.Decode(bytes.NewReader(fileBytes))
-	if err != nil {
-		return "", fmt.Errorf("image decode error: %w", err)
-	}
-
-	resized := imaging.Fill(img, 256, 256, imaging.Center, imaging.Lanczos)
-
-	var buf bytes.Buffer
-	if err := imaging.Encode(&buf, resized, imaging.JPEG, imaging.JPEGQuality(85)); err != nil {
-		return "", fmt.Errorf("image encode error: %w", err)
-	}
-
-	key := fmt.Sprintf("families/%s/avatars/%s/%s.jpg", familyID, userID, uuid.New().String())
-
-	_, err = r.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(r.bucket),
-		Key:         aws.String(key),
-		Body:        bytes.NewReader(buf.Bytes()),
-		ContentType: aws.String("image/jpeg"),
-	})
-	if err != nil {
-		return "", fmt.Errorf("r2 upload error: %w", err)
-	}
-
-	return fmt.Sprintf("%s/%s", r.publicURL, key), nil
+func (r *R2Client) PresignTTLSeconds() int {
+	return int(r.presignTTL.Seconds())
 }
 
-// UploadLogo resizes to 512x512 and uploads as the family logo.
-func (r *R2Client) UploadLogo(ctx context.Context, familyID string, fileBytes []byte, contentType string) (string, error) {
-	img, _, err := image.Decode(bytes.NewReader(fileBytes))
+func (r *R2Client) BuildAvatarObjectKey(familyID, userID, contentType string) (string, error) {
+	ext, err := extensionForContentType(contentType)
 	if err != nil {
-		return "", fmt.Errorf("image decode error: %w", err)
+		return "", err
 	}
+	return fmt.Sprintf("families/%s/avatars/%s/%s.%s", familyID, userID, uuid.NewString(), ext), nil
+}
 
-	resized := imaging.Fill(img, 512, 512, imaging.Center, imaging.Lanczos)
-
-	var buf bytes.Buffer
-	if err := imaging.Encode(&buf, resized, imaging.JPEG, imaging.JPEGQuality(90)); err != nil {
-		return "", fmt.Errorf("image encode error: %w", err)
+func (r *R2Client) BuildLogoObjectKey(familyID, contentType string) (string, error) {
+	ext, err := extensionForContentType(contentType)
+	if err != nil {
+		return "", err
 	}
+	return fmt.Sprintf("families/%s/logos/%s.%s", familyID, uuid.NewString(), ext), nil
+}
 
-	key := fmt.Sprintf("families/%s/logo/%s.jpg", familyID, uuid.New().String())
-
-	_, err = r.client.PutObject(ctx, &s3.PutObjectInput{
+func (r *R2Client) CreatePresignedUpload(ctx context.Context, objectKey, contentType string) (string, error) {
+	res, err := r.presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(r.bucket),
-		Key:         aws.String(key),
-		Body:        bytes.NewReader(buf.Bytes()),
-		ContentType: aws.String("image/jpeg"),
+		Key:         aws.String(objectKey),
+		ContentType: aws.String(contentType),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = r.presignTTL
 	})
 	if err != nil {
-		return "", fmt.Errorf("r2 upload error: %w", err)
+		return "", fmt.Errorf("presign put failed: %w", err)
+	}
+	return res.URL, nil
+}
+
+func (r *R2Client) CreatePresignedDownload(ctx context.Context, objectKey string) (string, error) {
+	res, err := r.presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(r.bucket),
+		Key:    aws.String(objectKey),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = r.presignTTL
+	})
+	if err != nil {
+		return "", fmt.Errorf("presign get failed: %w", err)
+	}
+	return res.URL, nil
+}
+
+func (r *R2Client) GetObjectMetadata(ctx context.Context, objectKey string) (*ObjectMetadata, error) {
+	out, err := r.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(r.bucket),
+		Key:    aws.String(objectKey),
+	})
+	if err == nil {
+		return &ObjectMetadata{
+			SizeBytes:   aws.ToInt64(out.ContentLength),
+			ContentType: aws.ToString(out.ContentType),
+		}, nil
 	}
 
-	return fmt.Sprintf("%s/%s", r.publicURL, key), nil
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		code := apiErr.ErrorCode()
+		if code == "NotFound" || code == "NoSuchKey" {
+			return nil, ErrObjectNotFound
+		}
+	}
+
+	return nil, fmt.Errorf("head object failed: %w", err)
+}
+
+func extensionForContentType(contentType string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(contentType)) {
+	case "image/jpeg", "image/jpg":
+		return "jpg", nil
+	case "image/png":
+		return "png", nil
+	case "image/webp":
+		return "webp", nil
+	default:
+		return "", fmt.Errorf("unsupported content type")
+	}
 }

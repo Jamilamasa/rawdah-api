@@ -57,10 +57,10 @@ func NewQuizService(
 
 type AssignHadithInput struct {
 	FamilyID      uuid.UUID
-	HadithID      uuid.UUID
 	AssignedTo    uuid.UUID
 	AssignedBy    uuid.UUID
 	ChildAge      int
+	Difficulty    string
 	MemorizeUntil *time.Time
 }
 
@@ -70,23 +70,40 @@ func (s *QuizService) AssignHadith(ctx context.Context, input AssignHadithInput)
 		return nil, ErrInvalidQuizAssignee
 	}
 
-	hadith, err := s.hadithRepo.GetByID(ctx, input.HadithID.String())
-	if err != nil {
-		return nil, fmt.Errorf("hadith not found")
+	difficulty := input.Difficulty
+	if difficulty == "" {
+		difficulty = "easy"
 	}
 
-	prompt := ai.BuildHadithPrompt(*hadith, input.ChildAge)
-	questions, err := s.aiClient.GenerateQuiz(prompt)
+	prompt := ai.BuildHadithPrompt(input.ChildAge, difficulty)
+	result, err := s.aiClient.GenerateHadithQuiz(prompt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate quiz: %w", err)
 	}
 
+	// Persist the AI-selected hadith so the FK constraint on hadith_quizzes is satisfied.
+	h := &models.Hadith{
+		TextEn:     result.Hadith.TextEn,
+		Source:     result.Hadith.Source,
+		Difficulty: difficulty,
+	}
+	if result.Hadith.TextAr != "" {
+		h.TextAr = &result.Hadith.TextAr
+	}
+	if result.Hadith.Topic != "" {
+		h.Topic = &result.Hadith.Topic
+	}
+	hadith, err := s.hadithRepo.Insert(ctx, h)
+	if err != nil {
+		return nil, fmt.Errorf("failed to store hadith: %w", err)
+	}
+
 	quiz := &models.HadithQuiz{
 		FamilyID:      input.FamilyID,
-		HadithID:      input.HadithID,
+		HadithID:      hadith.ID,
 		AssignedTo:    input.AssignedTo,
 		AssignedBy:    input.AssignedBy,
-		Questions:     questions,
+		Questions:     result.Questions,
 		Status:        "pending",
 		MemorizeUntil: input.MemorizeUntil,
 	}
@@ -419,34 +436,24 @@ func gradeAnswers(questions []models.QuizQuestion, answers []models.QuizAnswer) 
 }
 
 func calculateXP(quizType string, score int) int {
-	baseXP := map[string]int{
+	base := map[string]int{
 		"hadith":  50,
 		"prophet": 40,
 		"quran":   40,
-	}
-	bonusXP := map[string]int{
-		"hadith":  25,
-		"prophet": 20,
-		"quran":   20,
-	}
-
-	base := baseXP[quizType]
+	}[quizType]
 	if base == 0 {
 		base = 30
 	}
-	bonus := bonusXP[quizType]
+	bonus := map[string]int{
+		"hadith":  25,
+		"prophet": 20,
+		"quran":   20,
+	}[quizType]
 	if bonus == 0 {
 		bonus = 15
 	}
-
 	if score == 100 {
 		return base + bonus
 	}
-	if score >= 70 {
-		return base
-	}
-	if score >= 50 {
-		return base / 2
-	}
-	return 0
+	return base
 }

@@ -8,15 +8,16 @@ import (
 
 func validConfig() *Config {
 	return &Config{
-		Port:             "8080",
-		Env:              "production",
-		AllowedOrigins:   []string{"https://app.rawdah.app"},
-		DatabaseURL:      "postgres://example",
-		JWTAccessSecret:  strings.Repeat("a", 64),
-		JWTRefreshSecret: strings.Repeat("b", 64),
-		AccessTokenTTL:   15 * time.Minute,
-		RefreshTokenTTL:  7 * 24 * time.Hour,
-		ChildTokenTTL:    4 * time.Hour,
+		Port:                  "8080",
+		Env:                   "production",
+		AllowedOrigins:        []string{"https://app.rawdah.app"},
+		DatabaseURL:           "postgres://example",
+		JWTAccessSecret:       strings.Repeat("a", 64),
+		JWTRefreshSecret:      strings.Repeat("b", 64),
+		AccessTokenTTL:        15 * time.Minute,
+		RefreshTokenTTL:       7 * 24 * time.Hour,
+		ChildTokenTTL:         4 * time.Hour,
+		PresignExpiresSeconds: 600,
 	}
 }
 

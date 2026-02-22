@@ -6,53 +6,31 @@ import (
 	"github.com/rawdah/rawdah-api/internal/models"
 )
 
-// BuildHadithPrompt creates a quiz generation prompt for a hadith.
-func BuildHadithPrompt(hadith models.Hadith, childAge int) string {
+// BuildHadithPrompt creates a self-contained quiz generation prompt.
+// The AI selects an authentic hadith and generates questions — no pre-fetched hadith required.
+func BuildHadithPrompt(childAge int, difficulty string) string {
 	ageContext := ""
 	if childAge > 0 {
 		ageContext = fmt.Sprintf(" The child is %d years old, so calibrate language and difficulty appropriately.", childAge)
 	}
 
-	textAr := ""
-	if hadith.TextAr != nil {
-		textAr = fmt.Sprintf("\nArabic: %s", *hadith.TextAr)
-	}
+	return fmt.Sprintf(`You are an Islamic educator creating quiz questions for Muslim children.
+Respond ONLY with valid JSON. No preamble, no explanation outside JSON.%s
 
-	topic := ""
-	if hadith.Topic != nil {
-		topic = fmt.Sprintf("\nTopic: %s", *hadith.Topic)
-	}
+Choose one authentic hadith from the Kutub al-Sittah (Sahih Bukhari, Sahih Muslim, Sunan Abu Dawud, Jami at-Tirmidhi, Sunan an-Nasai, or Sunan Ibn Majah) graded sahih or hasan, suitable for a child at difficulty level "%s".
 
-	return fmt.Sprintf(`You are an Islamic education assistant creating a quiz for a Muslim child learning about Hadith.%s
+IMPORTANT RULES:
+- Only use hadiths with a verified, established chain of narration (sahih or hasan). Never fabricate or paraphrase beyond the meaning.
+- The text_en must be a faithful English translation of the actual hadith.
+- The source must name the specific collection (e.g. "Bukhari", "Muslim", "Abu Dawud").
+- If the hadith has a well-known Arabic text, include it in text_ar; otherwise leave text_ar as an empty string.
 
-Create exactly 3 multiple-choice questions based on this hadith:
+Then generate exactly 3 multiple choice questions that test comprehension and memorisation of that hadith. Keep language simple and age-appropriate. Each question must have exactly 4 options labeled A, B, C, D.
 
-English: %s%s
-Source: %s%s
-Difficulty: %s
-
-Requirements:
-- Each question must test understanding of the hadith's meaning, context, or application in daily life
-- Questions should be age-appropriate and encouraging
-- Each question must have exactly 4 options labeled A, B, C, D
-- Provide a brief, educational explanation for the correct answer
-
-Respond ONLY with a valid JSON array (no markdown, no code blocks) in this exact format:
-[
-  {
-    "id": "q1",
-    "question": "Question text here?",
-    "options": {"A": "Option A", "B": "Option B", "C": "Option C", "D": "Option D"},
-    "correct_answer": "A",
-    "explanation": "Brief explanation why A is correct."
-  }
-]`,
+Respond with exactly this JSON structure:
+{"hadith":{"text_en":"...","text_ar":"...","source":"Bukhari","topic":"..."},"questions":[{"id":"q1","question":"...","options":{"A":"...","B":"...","C":"...","D":"..."},"correct_answer":"A","explanation":"..."}]}`,
 		ageContext,
-		hadith.TextEn,
-		textAr,
-		hadith.Source,
-		topic,
-		hadith.Difficulty,
+		difficulty,
 	)
 }
 
@@ -83,29 +61,19 @@ func BuildProphetPrompt(prophet models.Prophet, childAge int) string {
 		quranRefs = fmt.Sprintf("\nQuran References: %s", *prophet.QuranRefs)
 	}
 
-	return fmt.Sprintf(`You are an Islamic education assistant creating a quiz for a Muslim child learning about the Prophets.%s
+	return fmt.Sprintf(`You are an Islamic educator. Respond ONLY with valid JSON.%s
 
-Create exactly 3 multiple-choice questions based on Prophet %s%s:
+Generate exactly 3 multiple choice questions for a child about Prophet %s%s (peace be upon him).
 
-Story Summary: %s%s%s%s
-Difficulty: %s
+Context:
+- Story: %s%s%s%s
+- Difficulty: %s
 
-Requirements:
-- Questions should cover the prophet's story, character, miracles, and lessons
-- Questions should inspire love for the prophet and Islamic history
-- Each question must have exactly 4 options labeled A, B, C, D
-- Provide educational and encouraging explanations
+Mix question types: factual recall, comprehension, and fill-in-the-blank.
+Keep language simple and encouraging. Each question must have exactly 4 options labeled A, B, C, D.
 
-Respond ONLY with a valid JSON array (no markdown, no code blocks) in this exact format:
-[
-  {
-    "id": "q1",
-    "question": "Question text here?",
-    "options": {"A": "Option A", "B": "Option B", "C": "Option C", "D": "Option D"},
-    "correct_answer": "A",
-    "explanation": "Brief explanation why A is correct."
-  }
-]`,
+Respond with exactly this JSON structure:
+{"questions":[{"id":"q1","question":"...","options":{"A":"...","B":"...","C":"...","D":"..."},"correct_answer":"A","explanation":"..."}]}`,
 		ageContext,
 		prophet.NameEn,
 		nameAr,
@@ -139,33 +107,21 @@ func BuildQuranPrompt(verse models.QuranVerse, childAge int) string {
 		topic = fmt.Sprintf("\nTopic: %s", *verse.Topic)
 	}
 
-	return fmt.Sprintf(`You are an Islamic education assistant creating a quiz for a Muslim child learning about the Quran.%s
+	return fmt.Sprintf(`You are an Islamic educator. Respond ONLY with valid JSON.%s
 
-Create exactly 3 multiple-choice questions based on this Quran verse:
+Generate 2 comprehension questions and 1 fill-in-the-blank for a child about this Quran verse:
 
-Surah: %s (Chapter %d, Verse %d)
+Surah: %s (%d:%d)
 Arabic: %s%s
-English Translation: %s
-Simple Tafsir: %s%s%s
+English: %s
+Meaning: %s%s%s
 Difficulty: %s
 
-Requirements:
-- Questions should test understanding of the verse's meaning, the tafsir, and its application in life
-- One question should be about the Arabic word meaning or the translation
-- Questions should nurture love for the Quran
-- Each question must have exactly 4 options labeled A, B, C, D
-- Provide clear, educational explanations
+Focus on understanding the meaning, not Arabic memorisation. Keep language simple.
+Each question must have exactly 4 options labeled A, B, C, D.
 
-Respond ONLY with a valid JSON array (no markdown, no code blocks) in this exact format:
-[
-  {
-    "id": "q1",
-    "question": "Question text here?",
-    "options": {"A": "Option A", "B": "Option B", "C": "Option C", "D": "Option D"},
-    "correct_answer": "A",
-    "explanation": "Brief explanation why A is correct."
-  }
-]`,
+Respond with exactly this JSON structure:
+{"questions":[{"id":"q1","question":"...","options":{"A":"...","B":"...","C":"...","D":"..."},"correct_answer":"A","explanation":"..."}]}`,
 		ageContext,
 		verse.SurahNameEn,
 		verse.SurahNumber,

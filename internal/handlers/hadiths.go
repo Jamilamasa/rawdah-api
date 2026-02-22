@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rawdah/rawdah-api/internal/models"
 	"github.com/rawdah/rawdah-api/internal/repository"
 )
 
@@ -33,6 +34,17 @@ func (h *HadithHandler) Random(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, hadith)
+}
+
+// Learned returns all hadiths the authenticated child has completed a quiz for.
+func (h *HadithHandler) Learned(c *gin.Context) {
+	userID := c.GetString(string(models.ContextKeyUserID))
+	hadiths, err := h.repo.Learned(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"hadiths": hadiths, "count": len(hadiths)})
 }
 
 func (h *HadithHandler) Get(c *gin.Context) {

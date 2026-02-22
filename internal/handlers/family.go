@@ -11,11 +11,12 @@ import (
 )
 
 type FamilyHandler struct {
-	svc *services.FamilyService
+	svc    *services.FamilyService
+	signer mediaURLSigner
 }
 
-func NewFamilyHandler(svc *services.FamilyService) *FamilyHandler {
-	return &FamilyHandler{svc: svc}
+func NewFamilyHandler(svc *services.FamilyService, signer mediaURLSigner) *FamilyHandler {
+	return &FamilyHandler{svc: svc, signer: signer}
 }
 
 func (h *FamilyHandler) Get(c *gin.Context) {
@@ -25,6 +26,7 @@ func (h *FamilyHandler) Get(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
+	applySignedMediaToFamily(c.Request.Context(), h.signer, family)
 	c.JSON(http.StatusOK, family)
 }
 
@@ -44,6 +46,7 @@ func (h *FamilyHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
+	applySignedMediaToFamily(c.Request.Context(), h.signer, family)
 	c.JSON(http.StatusOK, family)
 }
 
@@ -54,6 +57,7 @@ func (h *FamilyHandler) ListMembers(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
+	applySignedMediaToUsers(c.Request.Context(), h.signer, members)
 	c.JSON(http.StatusOK, gin.H{"members": members})
 }
 
@@ -110,6 +114,7 @@ func (h *FamilyHandler) CreateMember(c *gin.Context) {
 		}
 		return
 	}
+	applySignedMediaToUser(c.Request.Context(), h.signer, member)
 	c.JSON(http.StatusCreated, member)
 }
 
@@ -122,6 +127,7 @@ func (h *FamilyHandler) GetMember(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
+	applySignedMediaToUser(c.Request.Context(), h.signer, member)
 	c.JSON(http.StatusOK, member)
 }
 
@@ -152,6 +158,7 @@ func (h *FamilyHandler) UpdateMember(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
+	applySignedMediaToUser(c.Request.Context(), h.signer, member)
 	c.JSON(http.StatusOK, member)
 }
 
@@ -175,7 +182,7 @@ func (h *FamilyHandler) RantCount(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"rant_count": count})
+	c.JSON(http.StatusOK, gin.H{"count": count})
 }
 
 func (h *FamilyHandler) ListAccessControl(c *gin.Context) {

@@ -12,11 +12,12 @@ import (
 var slugRegex = regexp.MustCompile(`^[a-z0-9-]+$`)
 
 type AuthHandler struct {
-	svc *services.AuthService
+	svc    *services.AuthService
+	signer mediaURLSigner
 }
 
-func NewAuthHandler(svc *services.AuthService) *AuthHandler {
-	return &AuthHandler{svc: svc}
+func NewAuthHandler(svc *services.AuthService, signer mediaURLSigner) *AuthHandler {
+	return &AuthHandler{svc: svc, signer: signer}
 }
 
 func (h *AuthHandler) Signup(c *gin.Context) {
@@ -66,6 +67,9 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 		return
 	}
 
+	applySignedMediaToUser(c.Request.Context(), h.signer, tokens.User)
+	applySignedMediaToFamily(c.Request.Context(), h.signer, tokens.Family)
+
 	setRefreshCookie(c, tokens.RefreshToken)
 	c.JSON(http.StatusCreated, gin.H{
 		"access_token": tokens.AccessToken,
@@ -92,6 +96,9 @@ func (h *AuthHandler) Signin(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
+
+	applySignedMediaToUser(c.Request.Context(), h.signer, tokens.User)
+	applySignedMediaToFamily(c.Request.Context(), h.signer, tokens.Family)
 
 	setRefreshCookie(c, tokens.RefreshToken)
 	c.JSON(http.StatusOK, gin.H{
@@ -122,6 +129,9 @@ func (h *AuthHandler) ChildSignin(c *gin.Context) {
 		return
 	}
 
+	applySignedMediaToUser(c.Request.Context(), h.signer, tokens.User)
+	applySignedMediaToFamily(c.Request.Context(), h.signer, tokens.Family)
+
 	// Children do not receive refresh tokens. Clear any existing cookie.
 	clearRefreshCookie(c)
 	c.JSON(http.StatusOK, gin.H{
@@ -143,6 +153,9 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired refresh token"})
 		return
 	}
+
+	applySignedMediaToUser(c.Request.Context(), h.signer, tokens.User)
+	applySignedMediaToFamily(c.Request.Context(), h.signer, tokens.Family)
 
 	setRefreshCookie(c, tokens.RefreshToken)
 	c.JSON(http.StatusOK, gin.H{
@@ -170,6 +183,8 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
+	applySignedMediaToUser(c.Request.Context(), h.signer, user)
+	applySignedMediaToFamily(c.Request.Context(), h.signer, family)
 	c.JSON(http.StatusOK, gin.H{"user": user, "family": family})
 }
 

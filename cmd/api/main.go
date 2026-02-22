@@ -100,8 +100,8 @@ func main() {
 	notifSvc := services.NewNotificationService(notifRepo, pushSender, hub)
 
 	// Create handlers
-	authH := handlers.NewAuthHandler(authSvc)
-	familyH := handlers.NewFamilyHandler(familySvc)
+	authH := handlers.NewAuthHandler(authSvc, r2Client)
+	familyH := handlers.NewFamilyHandler(familySvc, r2Client)
 	taskH := handlers.NewTaskHandler(taskSvc)
 	rewardH := handlers.NewRewardHandler(rewardSvc)
 	hadithH := handlers.NewHadithHandler(hadithRepo)
@@ -200,6 +200,7 @@ func main() {
 		// Islamic content (public to all authenticated)
 		v1.GET("/hadiths", hadithH.List)
 		v1.GET("/hadiths/random", hadithH.Random)
+		v1.GET("/hadiths/learned", middleware.RoleGuard("child"), hadithH.Learned)
 		v1.GET("/hadiths/:id", hadithH.Get)
 		v1.GET("/prophets", prophetH.List)
 		v1.GET("/prophets/:id", prophetH.Get)
@@ -272,13 +273,21 @@ func main() {
 
 		// Upload
 		if uploadH != nil {
-			v1.POST("/upload/avatar", uploadH.Avatar)
-			v1.POST("/upload/logo", middleware.RoleGuard("parent"), uploadH.Logo)
+			v1.POST("/upload/avatar", uploadH.PresignAvatar)
+			v1.POST("/upload/avatar/confirm", uploadH.ConfirmAvatar)
+			v1.POST("/upload/logo", middleware.RoleGuard("parent"), uploadH.PresignLogo)
+			v1.POST("/upload/logo/confirm", middleware.RoleGuard("parent"), uploadH.ConfirmLogo)
 		} else {
 			v1.POST("/upload/avatar", func(c *gin.Context) {
 				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "upload service not configured"})
 			})
+			v1.POST("/upload/avatar/confirm", func(c *gin.Context) {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "upload service not configured"})
+			})
 			v1.POST("/upload/logo", func(c *gin.Context) {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "upload service not configured"})
+			})
+			v1.POST("/upload/logo/confirm", func(c *gin.Context) {
 				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "upload service not configured"})
 			})
 		}

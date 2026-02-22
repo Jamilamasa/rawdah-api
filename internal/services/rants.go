@@ -10,6 +10,7 @@ import (
 )
 
 var ErrRantLocked = errors.New("rant is locked")
+var ErrRantWrongPassword = errors.New("wrong rant password")
 
 type RantService struct {
 	rantRepo *repository.RantRepo
@@ -67,13 +68,11 @@ func (s *RantService) Get(ctx context.Context, id, userID, password string) (*mo
 
 	if rant.IsLocked {
 		if password == "" {
-			// Return without content
 			rant.Content = ""
 			return rant, ErrRantLocked
 		}
 		if err := auth.CheckPassword(password, *rant.PasswordHash); err != nil {
-			rant.Content = ""
-			return rant, ErrRantLocked
+			return nil, ErrRantWrongPassword
 		}
 	}
 

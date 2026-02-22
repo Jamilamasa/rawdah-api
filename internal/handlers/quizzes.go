@@ -24,9 +24,9 @@ func (h *QuizHandler) AssignHadith(c *gin.Context) {
 	assignedBy := c.GetString(string(models.ContextKeyUserID))
 
 	var req struct {
-		HadithID      string     `json:"hadith_id"      binding:"required"`
 		AssignedTo    string     `json:"assigned_to"    binding:"required"`
 		ChildAge      int        `json:"child_age"`
+		Difficulty    string     `json:"difficulty"`
 		MemorizeUntil *time.Time `json:"memorize_until"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -37,11 +37,6 @@ func (h *QuizHandler) AssignHadith(c *gin.Context) {
 	fid, err := uuid.Parse(familyID)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-	hid, err := uuid.Parse(req.HadithID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid hadith_id"})
 		return
 	}
 	aid, err := uuid.Parse(req.AssignedTo)
@@ -57,10 +52,10 @@ func (h *QuizHandler) AssignHadith(c *gin.Context) {
 
 	quiz, err := h.svc.AssignHadith(c.Request.Context(), services.AssignHadithInput{
 		FamilyID:      fid,
-		HadithID:      hid,
 		AssignedTo:    aid,
 		AssignedBy:    abid,
 		ChildAge:      req.ChildAge,
+		Difficulty:    req.Difficulty,
 		MemorizeUntil: req.MemorizeUntil,
 	})
 	if err != nil {
