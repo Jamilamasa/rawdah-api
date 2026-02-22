@@ -3,12 +3,15 @@ package services
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
 	"github.com/rawdah/rawdah-api/internal/auth"
 	"github.com/rawdah/rawdah-api/internal/config"
@@ -44,7 +47,7 @@ func NewAuthService(db *sqlx.DB, authRepo *repository.AuthRepo, userRepo *reposi
 type SignupInput struct {
 	FamilyName string
 	Slug       string
-	ParentName string
+	Name       string
 	Email      string
 	Password   string
 }
@@ -60,18 +63,24 @@ func (s *AuthService) Signup(ctx context.Context, input SignupInput) (*AuthToken
 	input.Slug = strings.TrimSpace(strings.ToLower(input.Slug))
 	input.Email = strings.TrimSpace(strings.ToLower(input.Email))
 	input.FamilyName = strings.TrimSpace(input.FamilyName)
-	input.ParentName = strings.TrimSpace(input.ParentName)
+	input.Name = strings.TrimSpace(input.Name)
 
 	// Check slug uniqueness
-	existing, _ := s.familyRepo.GetFamilyBySlug(ctx, input.Slug)
-	if existing != nil {
+	existingFamily, err := s.familyRepo.GetFamilyBySlug(ctx, input.Slug)
+	if err == nil && existingFamily != nil {
 		return nil, ErrSlugTaken
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("check family slug availability: %w", err)
 	}
 
 	// Check email uniqueness
-	existingUser, _ := s.userRepo.GetByEmail(ctx, input.Email)
-	if existingUser != nil {
+	existingUser, err := s.userRepo.GetByEmail(ctx, input.Email)
+	if err == nil && existingUser != nil {
 		return nil, ErrEmailTaken
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("check email availability: %w", err)
 	}
 
 	passwordHash, err := auth.HashPassword(input.Password)
@@ -85,14 +94,17 @@ func (s *AuthService) Signup(ctx context.Context, input SignupInput) (*AuthToken
 		Plan: "free",
 	}
 	if err := s.familyRepo.CreateFamily(ctx, family); err != nil {
-		return nil, err
+		if isUniqueViolation(err, "families_slug_key") {
+			return nil, ErrSlugTaken
+		}
+		return nil, fmt.Errorf("create family: %w", err)
 	}
 
 	email := input.Email
 	user := &models.User{
 		FamilyID:         family.ID,
 		Role:             "parent",
-		Name:             input.ParentName,
+		Name:             input.Name,
 		Email:            &email,
 		PasswordHash:     passwordHash,
 		Theme:            "forest",
@@ -100,7 +112,10 @@ func (s *AuthService) Signup(ctx context.Context, input SignupInput) (*AuthToken
 		GameLimitMinutes: 60,
 	}
 	if err := s.familyRepo.CreateMember(ctx, user); err != nil {
-		return nil, err
+		if isUniqueViolation(err, "idx_users_email") {
+			return nil, ErrEmailTaken
+		}
+		return nil, fmt.Errorf("create initial parent user: %w", err)
 	}
 
 	// Create user XP record
@@ -289,4 +304,23 @@ func (s *AuthService) issueTokens(ctx context.Context, user *models.User, family
 func hashToken(raw string) string {
 	h := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(h[:])
+}
+
+func isUniqueViolation(err error, constraints ...string) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	if pgErr.Code != "23505" {
+		return false
+	}
+	if len(constraints) == 0 {
+		return true
+	}
+	for _, c := range constraints {
+		if pgErr.ConstraintName == c {
+			return true
+		}
+	}
+	return false
 }

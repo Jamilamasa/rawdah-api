@@ -23,7 +23,7 @@ func (h *LessonHandler) ListLessons(c *gin.Context) {
 	familyID := c.GetString(string(models.ContextKeyFamilyID))
 	lessons, err := h.svc.ListLessons(c.Request.Context(), familyID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"lessons": lessons})
@@ -39,28 +39,28 @@ func (h *LessonHandler) CreateLesson(c *gin.Context) {
 		RewardID   *string `json:"reward_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 
 	fid, err := uuid.Parse(familyID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 	vid, err := uuid.Parse(req.VerseID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid verse_id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Verse ID format is invalid."})
 		return
 	}
 	aid, err := uuid.Parse(req.AssignedTo)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid assigned_to"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Assigned user ID format is invalid."})
 		return
 	}
 	abid, err := uuid.Parse(assignedBy)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 
@@ -68,7 +68,7 @@ func (h *LessonHandler) CreateLesson(c *gin.Context) {
 	if req.RewardID != nil {
 		rid, err := uuid.Parse(*req.RewardID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid reward_id"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Reward ID format is invalid."})
 			return
 		}
 		rewardID = &rid
@@ -83,10 +83,10 @@ func (h *LessonHandler) CreateLesson(c *gin.Context) {
 	})
 	if err != nil {
 		if err == services.ErrInvalidLessonAssignee {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, lesson)
@@ -98,7 +98,7 @@ func (h *LessonHandler) ListMyLessons(c *gin.Context) {
 
 	lessons, err := h.svc.ListMyLessons(c.Request.Context(), userID, familyID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"lessons": lessons})
@@ -110,7 +110,7 @@ func (h *LessonHandler) GetLesson(c *gin.Context) {
 
 	lesson, err := h.svc.GetLesson(c.Request.Context(), id, familyID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 		return
 	}
 	c.JSON(http.StatusOK, lesson)
@@ -123,7 +123,7 @@ func (h *LessonHandler) CompleteLesson(c *gin.Context) {
 
 	lesson, err := h.svc.CompleteLesson(c.Request.Context(), id, userID, familyID)
 	if err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "unable to complete lesson"})
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Lesson cannot be completed in its current state."})
 		return
 	}
 	c.JSON(http.StatusOK, lesson)
@@ -135,7 +135,7 @@ func (h *LessonHandler) ListLearnContent(c *gin.Context) {
 	familyID := c.GetString(string(models.ContextKeyFamilyID))
 	content, err := h.svc.GetLearnContent(c.Request.Context(), familyID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"content": content})
@@ -153,18 +153,18 @@ func (h *LessonHandler) CreateLearnContent(c *gin.Context) {
 		RewardID    *string `json:"reward_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 
 	fid, err := uuid.Parse(familyID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 	cbid, err := uuid.Parse(createdBy)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 
@@ -172,7 +172,7 @@ func (h *LessonHandler) CreateLearnContent(c *gin.Context) {
 	if req.AssignedTo != nil {
 		aid, err := uuid.Parse(*req.AssignedTo)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid assigned_to"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Assigned user ID format is invalid."})
 			return
 		}
 		assignedTo = &aid
@@ -182,7 +182,7 @@ func (h *LessonHandler) CreateLearnContent(c *gin.Context) {
 	if req.RewardID != nil {
 		rid, err := uuid.Parse(*req.RewardID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid reward_id"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Reward ID format is invalid."})
 			return
 		}
 		rewardID = &rid
@@ -199,14 +199,14 @@ func (h *LessonHandler) CreateLearnContent(c *gin.Context) {
 	})
 	if err != nil {
 		if err == services.ErrInvalidLessonAssignee {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
 		if err == services.ErrInvalidLearnData {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid learn content"})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Learning content is invalid for this operation."})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, content)
@@ -218,7 +218,7 @@ func (h *LessonHandler) ListMyLearnContent(c *gin.Context) {
 
 	content, err := h.svc.GetMyLearnContent(c.Request.Context(), userID, familyID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"content": content})
@@ -230,7 +230,7 @@ func (h *LessonHandler) CompleteLearnContent(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := h.svc.CompleteLearnContent(c.Request.Context(), id, userID, familyID); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "unable to complete content"})
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Learning content cannot be completed in its current state."})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "content completed"})

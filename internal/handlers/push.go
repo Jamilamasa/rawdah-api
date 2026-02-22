@@ -28,17 +28,17 @@ func (h *PushHandler) Subscribe(c *gin.Context) {
 		Auth     string `json:"auth"     binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 	if !isValidPushEndpoint(req.Endpoint) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid endpoint"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The push endpoint URL is invalid."})
 		return
 	}
 
 	uid, err := uuid.Parse(userID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 	sub := &models.PushSubscription{
@@ -49,7 +49,7 @@ func (h *PushHandler) Subscribe(c *gin.Context) {
 	}
 
 	if err := h.repo.Subscribe(c.Request.Context(), sub); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"message": "subscribed"})
@@ -62,16 +62,16 @@ func (h *PushHandler) Unsubscribe(c *gin.Context) {
 		Endpoint string `json:"endpoint" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 	if !isValidPushEndpoint(req.Endpoint) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid endpoint"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The push endpoint URL is invalid."})
 		return
 	}
 
 	if err := h.repo.Unsubscribe(c.Request.Context(), req.Endpoint, userID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "unsubscribed"})

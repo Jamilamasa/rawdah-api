@@ -354,6 +354,133 @@ func (r *QuizRepo) SubmitQuranQuiz(ctx context.Context, id, familyID string, ans
 	return err
 }
 
+// ---- Topic Quizzes ----
+
+func (r *QuizRepo) CreateTopicQuiz(ctx context.Context, q *models.TopicQuiz) error {
+	flashcardsJSON, err := json.Marshal(q.Flashcards)
+	if err != nil {
+		return err
+	}
+	questionsJSON, err := json.Marshal(q.Questions)
+	if err != nil {
+		return err
+	}
+	return r.db.QueryRowContext(ctx,
+		`INSERT INTO topic_quizzes (family_id, assigned_to, assigned_by, category, topic, lesson_content, flashcards, questions, status)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		 RETURNING id, created_at`,
+		q.FamilyID, q.AssignedTo, q.AssignedBy, q.Category, q.Topic, q.LessonContent, flashcardsJSON, questionsJSON, q.Status,
+	).Scan(&q.ID, &q.CreatedAt)
+}
+
+func (r *QuizRepo) GetTopicQuizByID(ctx context.Context, id, familyID string) (*models.TopicQuiz, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, family_id, assigned_to, assigned_by, category, topic, lesson_content,
+		        flashcards, questions, answers, score, xp_awarded, status, completed_at, created_at
+		 FROM topic_quizzes WHERE id = $1 AND family_id = $2`,
+		id, familyID,
+	)
+	return scanTopicQuiz(row)
+}
+
+func scanTopicQuiz(row interface{ Scan(...interface{}) error }) (*models.TopicQuiz, error) {
+	var q models.TopicQuiz
+	var flashcardsRaw, questionsRaw, answersRaw []byte
+	err := row.Scan(
+		&q.ID, &q.FamilyID, &q.AssignedTo, &q.AssignedBy, &q.Category, &q.Topic, &q.LessonContent,
+		&flashcardsRaw, &questionsRaw, &answersRaw, &q.Score, &q.XPAwarded, &q.Status, &q.CompletedAt, &q.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(flashcardsRaw, &q.Flashcards); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(questionsRaw, &q.Questions); err != nil {
+		return nil, err
+	}
+	if answersRaw != nil {
+		if err := json.Unmarshal(answersRaw, &q.Answers); err != nil {
+			return nil, err
+		}
+	}
+	return &q, nil
+}
+
+func (r *QuizRepo) ListTopicQuizzesByFamily(ctx context.Context, familyID string) ([]*models.TopicQuiz, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, family_id, assigned_to, assigned_by, category, topic, lesson_content,
+		        flashcards, questions, answers, score, xp_awarded, status, completed_at, created_at
+		 FROM topic_quizzes WHERE family_id = $1 ORDER BY created_at DESC`,
+		familyID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []*models.TopicQuiz
+	for rows.Next() {
+		q, err := scanTopicQuiz(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, q)
+	}
+	return result, rows.Err()
+}
+
+func (r *QuizRepo) ListMyTopicQuizzes(ctx context.Context, userID, familyID string) ([]*models.TopicQuiz, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, family_id, assigned_to, assigned_by, category, topic, lesson_content,
+		        flashcards, questions, answers, score, xp_awarded, status, completed_at, created_at
+		 FROM topic_quizzes
+		 WHERE assigned_to = $1 AND family_id = $2
+		 ORDER BY created_at DESC`,
+		userID, familyID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []*models.TopicQuiz
+	for rows.Next() {
+		q, err := scanTopicQuiz(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, q)
+	}
+	return result, rows.Err()
+}
+
+func (r *QuizRepo) UpdateTopicQuizStatus(ctx context.Context, id, familyID, status string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE topic_quizzes SET status = $1 WHERE id = $2 AND family_id = $3`,
+		status, id, familyID,
+	)
+	return err
+}
+
+func (r *QuizRepo) SubmitTopicQuiz(ctx context.Context, id, familyID string, answers []models.QuizAnswer, score, xp int) error {
+	answersJSON, err := json.Marshal(answers)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.ExecContext(ctx,
+		`UPDATE topic_quizzes
+		    SET answers = $1,
+		        score = $2,
+		        xp_awarded = $3,
+		        status = 'completed',
+		        completed_at = NOW()
+		  WHERE id = $4 AND family_id = $5`,
+		answersJSON, score, xp, id, familyID,
+	)
+	return err
+}
+
 // CountCompletedHadithQuizzes counts completed hadith quizzes for a user
 func (r *QuizRepo) CountCompletedHadithQuizzes(ctx context.Context, userID, familyID string) (int, error) {
 	var count int
@@ -386,6 +513,8 @@ func (r *QuizRepo) HasPerfectScoreQuiz(ctx context.Context, userID, familyID str
 		   SELECT 1 FROM prophet_quizzes WHERE assigned_to = $1 AND family_id = $2 AND score = 100
 		   UNION ALL
 		   SELECT 1 FROM quran_quizzes WHERE assigned_to = $1 AND family_id = $2 AND score = 100
+		   UNION ALL
+		   SELECT 1 FROM topic_quizzes WHERE assigned_to = $1 AND family_id = $2 AND score = 100
 		 )`,
 		userID, familyID,
 	).Scan(&exists)
@@ -404,6 +533,9 @@ func (r *QuizRepo) CountAllCompletedQuizzes(ctx context.Context, userID, familyI
 		   WHERE assigned_to = $1 AND family_id = $2 AND status = 'completed'
 		 ) + (
 		   SELECT COUNT(*) FROM quran_quizzes
+		   WHERE assigned_to = $1 AND family_id = $2 AND status = 'completed'
+		 ) + (
+		   SELECT COUNT(*) FROM topic_quizzes
 		   WHERE assigned_to = $1 AND family_id = $2 AND status = 'completed'
 		 ) AS total`,
 		userID, familyID,

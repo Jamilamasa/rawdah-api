@@ -23,7 +23,7 @@ func (h *MessageHandler) Conversations(c *gin.Context) {
 
 	convs, err := h.svc.Conversations(c.Request.Context(), userID, familyID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"conversations": convs})
@@ -36,7 +36,7 @@ func (h *MessageHandler) Thread(c *gin.Context) {
 
 	messages, err := h.svc.GetThread(c.Request.Context(), userID, otherUserID, familyID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"messages": messages})
@@ -51,23 +51,23 @@ func (h *MessageHandler) Send(c *gin.Context) {
 		Content     string `json:"content"      binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 
 	fid, err := uuid.Parse(familyID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 	sid, err := uuid.Parse(senderID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 	rid, err := uuid.Parse(req.RecipientID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid recipient_id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Recipient ID format is invalid."})
 		return
 	}
 
@@ -79,14 +79,14 @@ func (h *MessageHandler) Send(c *gin.Context) {
 	})
 	if err != nil {
 		if err == services.ErrInvalidRecipient {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
 		if err == services.ErrInvalidMessage {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid message"})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Message content is invalid."})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, msg)
@@ -98,7 +98,7 @@ func (h *MessageHandler) MarkRead(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := h.svc.MarkRead(c.Request.Context(), id, userID, familyID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "marked as read"})

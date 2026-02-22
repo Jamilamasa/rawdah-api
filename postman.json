@@ -1,0 +1,2828 @@
+{
+  "info": {
+    "_postman_id": "9d3a8c40-0000-4000-8000-rawdah000001",
+    "name": "Rawdah API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Postman collection for Rawdah API (Go + Gin). Includes auth, family, tasks, rewards, Islamic content, quizzes, lessons, learn, messages, rants, requests, games, dashboard, notifications, push, upload, and health.\n\nAuth:\n1. POST /v1/auth/signup – create family + parent.\n2. POST /v1/auth/signin – sign in parent/adult (sets access_token variable).\n3. POST /v1/auth/child/signin – sign in child.\n4. POST /v1/auth/refresh – refresh access token using refresh cookie.\n5. POST /v1/auth/signout – clear refresh cookie.\n\nAll /v1 routes (except /v1/auth/*) require Authorization: Bearer {{access_token}}.\n\nSome endpoints require specific roles and permissions (parent, adult_relative, child)."
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Simple health check.\n\nResponse: { \"status\": \"ok\", \"time\": \"...\" }"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth (public)",
+      "item": [
+        {
+          "name": "POST /v1/auth/signup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"family_name\": \"Masa Family\",\n  \"slug\": \"masa-family\",\n  \"name\": \"Parent Name\",\n  \"email\": \"parent@example.com\",\n  \"password\": \"changeme123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/auth/signup",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "signup"
+              ]
+            },
+            "description": "Sign up a new family and parent user.\n\nBody:\n- family_name (string, required)\n- slug (string, required, lowercase letters/numbers/hyphens)\n- name (string, required)\n- email (string, required, email)\n- password (string, required, min 8)\n\nOn success (201):\n- Sets a refresh cookie `rawdah_refresh` (HTTP-only)\n- Returns: { \"access_token\", \"user\", \"family\" }"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/auth/signin (parent/adult)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"parent@example.com\",\n  \"password\": \"changeme123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/auth/signin",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "signin"
+              ]
+            },
+            "description": "Sign in a parent or adult-relative user.\n\nBody:\n- email (string, required)\n- password (string, required)\n\nOn success (200):\n- Sets HTTP-only refresh cookie `rawdah_refresh`.\n- Returns: { \"access_token\", \"user\", \"family\" }.\n\nThis request has a test script to set {{access_token}} from the response."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.access_token) {",
+                  "        pm.environment.set(\"access_token\", jsonData.access_token);",
+                  "    }",
+                  "} catch (e) {",
+                  "    console.log(\"Failed to parse JSON or set access_token\", e);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /v1/auth/child/signin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"family_slug\": \"masa-family\",\n  \"username\": \"kid1\",\n  \"password\": \"childpass123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/auth/child/signin",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "child",
+                "signin"
+              ]
+            },
+            "description": "Sign in a child user.\n\nBody:\n- family_slug (string, required)\n- username (string, required)\n- password (string, required)\n\nOn success (200):\n- Children do NOT receive a refresh cookie.\n- Response: { \"access_token\", \"user\", \"family\" }"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/auth/refresh",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Refresh access token using the HTTP-only refresh cookie `rawdah_refresh`.\n\nThis relies on cookies managed by Postman. Make sure the previous signin/signup response set the cookie.\n\nOn success (200):\n- Returns new { \"access_token\", \"user\", \"family\" }.\n- Renews the refresh cookie."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/auth/signout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/auth/signout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "signout"
+              ]
+            },
+            "description": "Sign out: invalidates refresh token and clears `rawdah_refresh` cookie.\n\nResponse: { \"message\": \"signed out\" }"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth (me, protected)",
+      "item": [
+        {
+          "name": "GET /v1/auth/me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Get current authenticated user and family.\n\nHeaders:\n- Authorization: Bearer {{access_token}}"
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /v1/auth/me/password",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"changeme123\",\n  \"new_password\": \"newSecret1234\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/auth/me/password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "me",
+                "password"
+              ]
+            },
+            "description": "Change current user's password.\n\nBody:\n- current_password (string, required)\n- new_password (string, required, must meet length rules)\n\nHeaders:\n- Authorization: Bearer {{access_token}}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Family",
+      "item": [
+        {
+          "name": "GET /v1/family",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/family",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "family"
+              ]
+            },
+            "description": "Get current family details."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /v1/family (parent only)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Masa Family\",\n  \"logo_url\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/family",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "family"
+              ]
+            },
+            "description": "Update family name/logo (parent only)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/family/members",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/family/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "family",
+                "members"
+              ]
+            },
+            "description": "List family members."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/family/members (parent only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"child\",\n  \"name\": \"Child One\",\n  \"username\": \"kid1\",\n  \"email\": null,\n  \"password\": \"childpass123\",\n  \"date_of_birth\": \"2015-01-01T00:00:00Z\",\n  \"game_limit_minutes\": 60\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/family/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "family",
+                "members"
+              ]
+            },
+            "description": "Create a new family member (parent only).\n\nBody:\n- role (string, required: parent | adult_relative | child)\n- name (string, required)\n- username (string, optional)\n- email (string, optional)\n- password (string, required)\n- date_of_birth (ISO8601, optional)\n- game_limit_minutes (int, optional)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/family/members/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/family/members/{{member_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "family",
+                "members",
+                "{{member_id}}"
+              ]
+            },
+            "description": "Get a specific family member.\n\nPath variables:\n- member_id: UUID of user."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /v1/family/members/:id (parent only)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Child One\",\n  \"theme\": \"dark\",\n  \"game_limit_minutes\": 90,\n  \"date_of_birth\": \"2015-01-01T00:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/family/members/{{member_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "family",
+                "members",
+                "{{member_id}}"
+              ]
+            },
+            "description": "Update fields for a family member (parent only)."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /v1/family/members/:id (parent only)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/family/members/{{member_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "family",
+                "members",
+                "{{member_id}}"
+              ]
+            },
+            "description": "Deactivate a family member (parent only)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/family/members/:id/rant-count (parent only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/family/members/{{child_id}}/rant-count",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "family",
+                "members",
+                "{{child_id}}",
+                "rant-count"
+              ]
+            },
+            "description": "Get number of rants for a child."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/family/access-control (parent only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/family/access-control",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "family",
+                "access-control"
+              ]
+            },
+            "description": "List access-control permissions for adult relatives."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /v1/family/access-control/:grantee_id (parent only)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissions\": [\n    \"view_dashboard\",\n    \"assign_tasks\",\n    \"view_tasks\",\n    \"approve_rewards\",\n    \"view_messages\",\n    \"manage_quizzes\",\n    \"manage_learn\",\n    \"respond_requests\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/family/access-control/{{grantee_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "family",
+                "access-control",
+                "{{grantee_id}}"
+              ]
+            },
+            "description": "Set permissions for an adult_relative (parent only).\n\nPermissions examples:\n- view_dashboard\n- assign_tasks\n- view_tasks\n- approve_rewards\n- view_messages\n- manage_quizzes\n- manage_learn\n- respond_requests"
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /v1/family/access-control/:grantee_id (parent only)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/family/access-control/{{grantee_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "family",
+                "access-control",
+                "{{grantee_id}}"
+              ]
+            },
+            "description": "Revoke all permissions for an adult_relative."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "GET /v1/tasks",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tasks?status=&assigned_to=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tasks"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "Optional: filter by status (e.g. pending, in_progress, completed)."
+                },
+                {
+                  "key": "assigned_to",
+                  "value": "",
+                  "description": "Optional: user ID to filter by (non-child roles only)."
+                }
+              ]
+            },
+            "description": "List tasks.\n\nChildren automatically see only their own tasks."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/tasks (parent/adult_relative)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Clean your room\",\n  \"description\": \"Tidy up and vacuum.\",\n  \"assigned_to\": \"{{child_id}}\",\n  \"reward_id\": null,\n  \"due_date\": \"2024-12-31T18:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/tasks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tasks"
+              ]
+            },
+            "description": "Create a new task (parent or adult_relative with permission).\n\nBody:\n- title (string, required)\n- description (string|null)\n- assigned_to (string UUID, required)\n- reward_id (string UUID|null)\n- due_date (ISO8601|null)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/tasks/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tasks/{{task_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tasks",
+                "{{task_id}}"
+              ]
+            },
+            "description": "Get a single task.\n\nChildren can only see their own tasks."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /v1/tasks/:id (parent/adult_relative)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Clean your room thoroughly\",\n  \"description\": \"Tidy, vacuum, and dust.\",\n  \"reward_id\": null,\n  \"due_date\": \"2024-12-31T19:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/tasks/{{task_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tasks",
+                "{{task_id}}"
+              ]
+            },
+            "description": "Update a task's main fields (parent/adult_relative with permission).\n\nBody:\n- title (string, required)\n- description (string|null)\n- reward_id (string UUID|null)\n- due_date (ISO8601|null)"
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /v1/tasks/:id (parent/adult_relative)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tasks/{{task_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tasks",
+                "{{task_id}}"
+              ]
+            },
+            "description": "Delete a task (parent/adult_relative with permission)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/tasks/:id/start (child only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tasks/{{task_id}}/start",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tasks",
+                "{{task_id}}",
+                "start"
+              ]
+            },
+            "description": "Mark a task as started (child only)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/tasks/:id/complete (child only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tasks/{{task_id}}/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tasks",
+                "{{task_id}}",
+                "complete"
+              ]
+            },
+            "description": "Mark a task as completed (child only)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/tasks/:id/request-reward (child only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tasks/{{task_id}}/request-reward",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tasks",
+                "{{task_id}}",
+                "request-reward"
+              ]
+            },
+            "description": "Child requests reward for a completed task."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/tasks/:id/approve-reward (parent/adult_relative)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tasks/{{task_id}}/approve-reward",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tasks",
+                "{{task_id}}",
+                "approve-reward"
+              ]
+            },
+            "description": "Approve a task reward (parent/adult_relative with approve_rewards permission)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/tasks/:id/decline-reward (parent/adult_relative)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tasks/{{task_id}}/decline-reward",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tasks",
+                "{{task_id}}",
+                "decline-reward"
+              ]
+            },
+            "description": "Decline a task reward (parent/adult_relative with approve_rewards permission)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Rewards",
+      "item": [
+        {
+          "name": "GET /v1/rewards",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/rewards",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "rewards"
+              ]
+            },
+            "description": "List rewards for the family."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/rewards (parent/adult_relative)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Extra screen time\",\n  \"description\": \"30 minutes of extra game time\",\n  \"value\": 1,\n  \"type\": \"time\",\n  \"icon\": \"⏱️\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/rewards",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "rewards"
+              ]
+            },
+            "description": "Create a reward.\n\nBody:\n- title (string, required)\n- description (string|null)\n- value (float)\n- type (string)\n- icon (string|null)"
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /v1/rewards/:id (parent only)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Extra screen time\",\n  \"description\": \"45 minutes of extra game time\",\n  \"value\": 1.5,\n  \"type\": \"time\",\n  \"icon\": \"⏱️\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/rewards/{{reward_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "rewards",
+                "{{reward_id}}"
+              ]
+            },
+            "description": "Update a reward (parent only)."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /v1/rewards/:id (parent only)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/rewards/{{reward_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "rewards",
+                "{{reward_id}}"
+              ]
+            },
+            "description": "Delete a reward (parent only)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Islamic Content",
+      "item": [
+        {
+          "name": "GET /v1/hadiths",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/hadiths?difficulty=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "hadiths"
+              ],
+              "query": [
+                {
+                  "key": "difficulty",
+                  "value": "",
+                  "description": "Optional difficulty filter (e.g. easy, medium, hard)."
+                }
+              ]
+            },
+            "description": "List hadiths (all authenticated users)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/hadiths/random",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/hadiths/random?difficulty=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "hadiths",
+                "random"
+              ],
+              "query": [
+                {
+                  "key": "difficulty",
+                  "value": "",
+                  "description": "Optional difficulty filter."
+                }
+              ]
+            },
+            "description": "Get a random hadith (optionally filtered by difficulty)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/hadiths/learned (child only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/hadiths/learned",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "hadiths",
+                "learned"
+              ]
+            },
+            "description": "Get all hadiths for which the child completed quizzes."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/hadiths/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/hadiths/{{hadith_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "hadiths",
+                "{{hadith_id}}"
+              ]
+            },
+            "description": "Get a hadith by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/prophets",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/prophets",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "prophets"
+              ]
+            },
+            "description": "List prophets with story summaries."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/prophets/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/prophets/{{prophet_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "prophets",
+                "{{prophet_id}}"
+              ]
+            },
+            "description": "Get prophet by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/quran/verses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/quran/verses?topic=&difficulty=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "quran",
+                "verses"
+              ],
+              "query": [
+                {
+                  "key": "topic",
+                  "value": "",
+                  "description": "Optional topic filter."
+                },
+                {
+                  "key": "difficulty",
+                  "value": "",
+                  "description": "Optional difficulty filter."
+                }
+              ]
+            },
+            "description": "List Quran verses with optional topic/difficulty filters."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/quran/verses/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/quran/verses/{{verse_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "quran",
+                "verses",
+                "{{verse_id}}"
+              ]
+            },
+            "description": "Get Quran verse by ID."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Quizzes",
+      "item": [
+        {
+          "name": "POST /v1/quizzes/hadith (assign)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assigned_to\": \"{{child_id}}\",\n  \"child_age\": 9,\n  \"difficulty\": \"easy\",\n  \"memorize_until\": \"2024-12-31T00:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/quizzes/hadith",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "quizzes",
+                "hadith"
+              ]
+            },
+            "description": "Assign a hadith quiz to a child."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/quizzes/prophet (assign)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prophet_id\": \"{{prophet_id}}\",\n  \"assigned_to\": \"{{child_id}}\",\n  \"child_age\": 9\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/quizzes/prophet",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "quizzes",
+                "prophet"
+              ]
+            },
+            "description": "Assign a prophet quiz."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/quizzes/quran (assign)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verse_id\": \"{{verse_id}}\",\n  \"lesson_id\": null,\n  \"assigned_to\": \"{{child_id}}\",\n  \"child_age\": 9\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/quizzes/quran",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "quizzes",
+                "quran"
+              ]
+            },
+            "description": "Assign a Quran quiz."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/quizzes (list, parent/adult_relative)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/quizzes?type=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "quizzes"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "",
+                  "description": "Optional: hadith | prophet | quran"
+                }
+              ]
+            },
+            "description": "List quizzes for the family (parent/adult_relative). Children calling this automatically get their own via ListMine."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/quizzes/my (child)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/quizzes/my",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "quizzes",
+                "my"
+              ]
+            },
+            "description": "List quizzes assigned to the current child."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/quizzes/:type/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/quizzes/{{type}}/{{quiz_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "quizzes",
+                "{{type}}",
+                "{{quiz_id}}"
+              ]
+            },
+            "description": "Get a specific quiz by type and ID.\n\nPath params:\n- type: hadith | prophet | quran\n- quiz_id: quiz UUID"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/quizzes/:type/:id/start (child)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/quizzes/{{type}}/{{quiz_id}}/start",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "quizzes",
+                "{{type}}",
+                "{{quiz_id}}",
+                "start"
+              ]
+            },
+            "description": "Start a quiz as the child."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/quizzes/:type/:id/submit (child)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answers\": [\n    { \"question_id\": \"q1\", \"selected_answer\": \"A\", \"is_correct\": false },\n    { \"question_id\": \"q2\", \"selected_answer\": \"B\", \"is_correct\": false }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/quizzes/{{type}}/{{quiz_id}}/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "quizzes",
+                "{{type}}",
+                "{{quiz_id}}",
+                "submit"
+              ]
+            },
+            "description": "Submit answers for a quiz.\n\nThe API will determine correctness; `is_correct` can be ignored or left false, but the structure requires it."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Lessons & Learn",
+      "item": [
+        {
+          "name": "GET /v1/lessons/quran (parent/adult_relative)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/lessons/quran",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "lessons",
+                "quran"
+              ]
+            },
+            "description": "List Quran lessons assigned in the family."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/lessons/quran (parent/adult_relative)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verse_id\": \"{{verse_id}}\",\n  \"assigned_to\": \"{{child_id}}\",\n  \"reward_id\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/lessons/quran",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "lessons",
+                "quran"
+              ]
+            },
+            "description": "Create/assign a Quran lesson."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/lessons/quran/my (child)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/lessons/quran/my",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "lessons",
+                "quran",
+                "my"
+              ]
+            },
+            "description": "List Quran lessons assigned to the current child."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/lessons/quran/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/lessons/quran/{{lesson_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "lessons",
+                "quran",
+                "{{lesson_id}}"
+              ]
+            },
+            "description": "Get a Quran lesson by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/lessons/quran/:id/complete (child)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/lessons/quran/{{lesson_id}}/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "lessons",
+                "quran",
+                "{{lesson_id}}",
+                "complete"
+              ]
+            },
+            "description": "Mark a Quran lesson as completed by the child."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/learn (parent/adult_relative)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/learn",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "learn"
+              ]
+            },
+            "description": "List learn content for the family (created by parents/adult_relatives)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/learn (parent/adult_relative)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assigned_to\": \"{{child_id}}\",\n  \"title\": \"Dua before sleep\",\n  \"content_type\": \"text\",\n  \"content\": \"Memorize this dua...\",\n  \"reward_id\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/learn",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "learn"
+              ]
+            },
+            "description": "Create learn content.\n\nBody:\n- assigned_to (string UUID|null)\n- title (string, required)\n- content_type (string, required, e.g. \"text\")\n- content (string, required)\n- reward_id (string UUID|null)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/learn/my (child)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/learn/my",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "learn",
+                "my"
+              ]
+            },
+            "description": "List learn content assigned to the current child."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/learn/:id/complete (child)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/learn/{{content_id}}/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "learn",
+                "{{content_id}}",
+                "complete"
+              ]
+            },
+            "description": "Mark learn content as completed by the child."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Messages",
+      "item": [
+        {
+          "name": "GET /v1/messages/conversations (parent/adult_relative)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/messages/conversations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "messages",
+                "conversations"
+              ]
+            },
+            "description": "List conversations for the current user (needs view_messages permission for certain roles)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/messages/:user_id (thread)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/messages/{{other_user_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "messages",
+                "{{other_user_id}}"
+              ]
+            },
+            "description": "Get message thread between current user and another family member."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/messages (send)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipient_id\": \"{{other_user_id}}\",\n  \"content\": \"Salam!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "messages"
+              ]
+            },
+            "description": "Send a message to another family member."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /v1/messages/:id/read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/messages/{{message_id}}/read",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "messages",
+                "{{message_id}}",
+                "read"
+              ]
+            },
+            "description": "Mark a message as read."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Rants (child only)",
+      "item": [
+        {
+          "name": "GET /v1/rants",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/rants",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "rants"
+              ]
+            },
+            "description": "List child's rants (child role only)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/rants",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"I'm upset\",\n  \"content\": \"Today I felt...\",\n  \"password\": \"secret123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/rants",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "rants"
+              ]
+            },
+            "description": "Create a child rant.\n\nBody:\n- title (string|null)\n- content (string, required)\n- password (string|null, locks content)"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/rants/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "X-Rant-Password",
+                "value": "",
+                "description": "Optional: needed if rant is locked."
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/rants/{{rant_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "rants",
+                "{{rant_id}}"
+              ]
+            },
+            "description": "Get a rant by ID. If locked and no X-Rant-Password provided, only metadata is returned with is_locked=true."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /v1/rants/:id",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated title\",\n  \"content\": \"Updated rant content...\",\n  \"password\": \"newSecret\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/rants/{{rant_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "rants",
+                "{{rant_id}}"
+              ]
+            },
+            "description": "Update a rant (child only)."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /v1/rants/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/rants/{{rant_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "rants",
+                "{{rant_id}}"
+              ]
+            },
+            "description": "Delete a rant (child only)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Requests",
+      "item": [
+        {
+          "name": "GET /v1/requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/requests",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "requests"
+              ]
+            },
+            "description": "List requests in the family (permissions may differ by role)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/requests (child)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target_id\": \"{{parent_or_adult_id}}\",\n  \"title\": \"Can I have more game time?\",\n  \"description\": \"I completed my tasks.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/requests",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "requests"
+              ]
+            },
+            "description": "Create a request (child). target_id may be null to broadcast."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/requests/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/requests/{{request_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "requests",
+                "{{request_id}}"
+              ]
+            },
+            "description": "Get a specific request by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/requests/:id/respond (parent/adult_relative)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\",\n  \"message\": \"Yes, you can have extra time.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/requests/{{request_id}}/respond",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "requests",
+                "{{request_id}}",
+                "respond"
+              ]
+            },
+            "description": "Respond to a request.\n\nstatus examples: approved | rejected."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Games",
+      "item": [
+        {
+          "name": "GET /v1/games (available)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/games",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "games"
+              ]
+            },
+            "description": "List available games that can be time-tracked."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/games/sessions/start (child)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"game_name\": \"Minecraft\",\n  \"game_type\": \"console\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/games/sessions/start",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "games",
+                "sessions",
+                "start"
+              ]
+            },
+            "description": "Start a game session (child). Enforces daily game limit."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/games/sessions/:id/end (child)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/games/sessions/{{session_id}}/end",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "games",
+                "sessions",
+                "{{session_id}}",
+                "end"
+              ]
+            },
+            "description": "End a game session for the child."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/games/sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/games/sessions?user_id=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "games",
+                "sessions"
+              ],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "",
+                  "description": "Optional: filter by user_id. Children only see their own."
+                }
+              ]
+            },
+            "description": "List game sessions (family-wide or per user)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Dashboard (parent/adult_relative)",
+      "item": [
+        {
+          "name": "GET /v1/dashboard/summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/dashboard/summary",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "dashboard",
+                "summary"
+              ]
+            },
+            "description": "Summary stats for family dashboard."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/dashboard/task-completion",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/dashboard/task-completion?days=30",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "dashboard",
+                "task-completion"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30",
+                  "description": "Number of days to include (default 30)."
+                }
+              ]
+            },
+            "description": "Task completion metrics for given period."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/dashboard/game-time",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/dashboard/game-time?days=30",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "dashboard",
+                "game-time"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30"
+                }
+              ]
+            },
+            "description": "Game time metrics for given period."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/dashboard/quiz-scores",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/dashboard/quiz-scores?days=30",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "dashboard",
+                "quiz-scores"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30"
+                }
+              ]
+            },
+            "description": "Quiz score metrics for given period."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/dashboard/learn-progress",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/dashboard/learn-progress",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "dashboard",
+                "learn-progress"
+              ]
+            },
+            "description": "Learn content progress metrics."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notifications & Push",
+      "item": [
+        {
+          "name": "GET /v1/notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/notifications",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "notifications"
+              ]
+            },
+            "description": "List notifications for current user."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /v1/notifications/read-all",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/notifications/read-all",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "read-all"
+              ]
+            },
+            "description": "Mark all notifications as read."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /v1/notifications/:id/read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/notifications/{{notification_id}}/read",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "{{notification_id}}",
+                "read"
+              ]
+            },
+            "description": "Mark a single notification as read."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/push/subscribe",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"endpoint\": \"https://fcm.googleapis.com/fcm/send/....\",\n  \"p256dh\": \"<p256dh-key>\",\n  \"auth\": \"<auth-secret>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/push/subscribe",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "push",
+                "subscribe"
+              ]
+            },
+            "description": "Add a push subscription for the current user.\n\nValues should come from the browser's PushSubscription object."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /v1/push/subscribe",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"endpoint\": \"https://fcm.googleapis.com/fcm/send/....\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/push/subscribe",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "push",
+                "subscribe"
+              ]
+            },
+            "description": "Remove a push subscription for the current user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Upload",
+      "item": [
+        {
+          "name": "POST /v1/upload/avatar (presign)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filename\": \"avatar.png\",\n  \"content_type\": \"image/png\",\n  \"size\": 102400\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/upload/avatar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "upload",
+                "avatar"
+              ]
+            },
+            "description": "Get a pre-signed upload URL for user avatar.\n\nRequires R2 to be configured; otherwise returns 503."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/upload/avatar/confirm",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"object_key\": \"families/<family_id>/avatars/<user_id>/avatar.png\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/upload/avatar/confirm",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "upload",
+                "avatar",
+                "confirm"
+              ]
+            },
+            "description": "Confirm avatar upload after PUT to R2."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/upload/logo (presign, parent)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filename\": \"logo.png\",\n  \"content_type\": \"image/png\",\n  \"size\": 102400\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/upload/logo",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "upload",
+                "logo"
+              ]
+            },
+            "description": "Get a pre-signed upload URL for family logo (parent only)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /v1/upload/logo/confirm (parent)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"object_key\": \"families/<family_id>/logos/logo.png\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/upload/logo/confirm",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "upload",
+                "logo",
+                "confirm"
+              ]
+            },
+            "description": "Confirm family logo upload."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "WebSocket",
+      "item": [
+        {
+          "name": "GET /ws (docs only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "description": "Auth via middleware."
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ws",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ws"
+              ]
+            },
+            "description": "WebSocket endpoint used by the app for real-time updates.\n\nPostman is not ideal for WebSocket in this REST-style collection, but some Postman versions support WS connections.\n\nConnect to:\n- URL: ws://localhost:8080/ws (or wss:// in production)\n- Headers:\n  - Origin: one of ALLOWED_ORIGINS\n  - Authorization: Bearer {{access_token}}\n\nThe server upgrades if origin and auth are valid."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

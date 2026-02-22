@@ -31,18 +31,18 @@ func (h *GameHandler) StartSession(c *gin.Context) {
 		GameType string `json:"game_type" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 
 	fid, err := uuid.Parse(familyID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 	uid, err := uuid.Parse(userID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 
@@ -54,14 +54,14 @@ func (h *GameHandler) StartSession(c *gin.Context) {
 	})
 	if err != nil {
 		if err == services.ErrGameLimitExceeded {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "daily game limit exceeded"})
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Daily game-time limit has been reached."})
 			return
 		}
 		if err == services.ErrInvalidGame {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid game"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "The selected game is invalid."})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, session)
@@ -74,7 +74,7 @@ func (h *GameHandler) EndSession(c *gin.Context) {
 
 	session, err := h.svc.EndSession(c.Request.Context(), id, userID, familyID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 		return
 	}
 	c.JSON(http.StatusOK, session)
@@ -94,7 +94,7 @@ func (h *GameHandler) ListSessions(c *gin.Context) {
 
 	sessions, err := h.svc.ListSessions(c.Request.Context(), familyID, filterUserID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"sessions": sessions})

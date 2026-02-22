@@ -20,7 +20,7 @@ func (h *NotificationHandler) List(c *gin.Context) {
 	userID := c.GetString(string(models.ContextKeyUserID))
 	notifs, err := h.svc.List(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"notifications": notifs})
@@ -29,7 +29,7 @@ func (h *NotificationHandler) List(c *gin.Context) {
 func (h *NotificationHandler) ReadAll(c *gin.Context) {
 	userID := c.GetString(string(models.ContextKeyUserID))
 	if err := h.svc.ReadAll(c.Request.Context(), userID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "all notifications marked as read"})
@@ -40,7 +40,7 @@ func (h *NotificationHandler) ReadOne(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := h.svc.ReadOne(c.Request.Context(), id, userID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "notification marked as read"})

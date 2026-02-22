@@ -41,27 +41,27 @@ func (h *UploadHandler) PresignAvatar(c *gin.Context) {
 
 	var req presignUploadRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 	if req.Size <= 0 || req.Size > maxUploadBytes {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file too large, max 5MB"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File is too large. Maximum allowed size is 5 MB."})
 		return
 	}
 	if !isAllowedImageContentType(req.ContentType) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported content type"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported content type. Allowed types are image/jpeg, image/png, image/webp, and image/gif."})
 		return
 	}
 
 	objectKey, err := h.r2.BuildAvatarObjectKey(familyID, userID, req.ContentType)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported content type"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported content type. Allowed types are image/jpeg, image/png, image/webp, and image/gif."})
 		return
 	}
 
 	uploadURL, err := h.r2.CreatePresignedUpload(c.Request.Context(), objectKey, req.ContentType)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate upload url"})
+		respondInternalErrorWithMessage(c, "Unable to generate avatar upload URL at the moment.", err)
 		return
 	}
 
@@ -79,47 +79,47 @@ func (h *UploadHandler) ConfirmAvatar(c *gin.Context) {
 
 	var req confirmUploadRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 
 	expectedPrefix := fmt.Sprintf("families/%s/avatars/%s/", familyID, userID)
 	if !strings.HasPrefix(req.ObjectKey, expectedPrefix) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 		return
 	}
 
 	meta, err := h.r2.GetObjectMetadata(c.Request.Context(), req.ObjectKey)
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify object"})
+		respondInternalErrorWithMessage(c, "Unable to verify uploaded avatar at the moment.", err)
 		return
 	}
 	if meta.SizeBytes <= 0 || meta.SizeBytes > maxUploadBytes {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file too large, max 5MB"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File is too large. Maximum allowed size is 5 MB."})
 		return
 	}
 	if !isAllowedImageContentType(meta.ContentType) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported content type"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported content type. Allowed types are image/jpeg, image/png, image/webp, and image/gif."})
 		return
 	}
 
 	uid, err := uuid.Parse(userID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 	if err := h.userRepo.UpdateAvatar(c.Request.Context(), uid, familyID, req.ObjectKey); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update profile image"})
+		respondInternalErrorWithMessage(c, "Unable to update profile image at the moment.", err)
 		return
 	}
 
 	downloadURL, err := h.r2.CreatePresignedDownload(c.Request.Context(), req.ObjectKey)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate download url"})
+		respondInternalErrorWithMessage(c, "Unable to generate avatar download URL at the moment.", err)
 		return
 	}
 
@@ -135,27 +135,27 @@ func (h *UploadHandler) PresignLogo(c *gin.Context) {
 
 	var req presignUploadRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 	if req.Size <= 0 || req.Size > maxUploadBytes {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file too large, max 5MB"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File is too large. Maximum allowed size is 5 MB."})
 		return
 	}
 	if !isAllowedImageContentType(req.ContentType) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported content type"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported content type. Allowed types are image/jpeg, image/png, image/webp, and image/gif."})
 		return
 	}
 
 	objectKey, err := h.r2.BuildLogoObjectKey(familyID, req.ContentType)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported content type"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported content type. Allowed types are image/jpeg, image/png, image/webp, and image/gif."})
 		return
 	}
 
 	uploadURL, err := h.r2.CreatePresignedUpload(c.Request.Context(), objectKey, req.ContentType)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate upload url"})
+		respondInternalErrorWithMessage(c, "Unable to generate family logo upload URL at the moment.", err)
 		return
 	}
 
@@ -172,42 +172,42 @@ func (h *UploadHandler) ConfirmLogo(c *gin.Context) {
 
 	var req confirmUploadRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 
 	expectedPrefix := fmt.Sprintf("families/%s/logos/", familyID)
 	if !strings.HasPrefix(req.ObjectKey, expectedPrefix) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 		return
 	}
 
 	meta, err := h.r2.GetObjectMetadata(c.Request.Context(), req.ObjectKey)
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify object"})
+		respondInternalErrorWithMessage(c, "Unable to verify uploaded family logo at the moment.", err)
 		return
 	}
 	if meta.SizeBytes <= 0 || meta.SizeBytes > maxUploadBytes {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file too large, max 5MB"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File is too large. Maximum allowed size is 5 MB."})
 		return
 	}
 	if !isAllowedImageContentType(meta.ContentType) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported content type"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported content type. Allowed types are image/jpeg, image/png, image/webp, and image/gif."})
 		return
 	}
 
 	if err := h.familyRepo.UpdateLogoURL(c.Request.Context(), familyID, req.ObjectKey); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update family logo"})
+		respondInternalErrorWithMessage(c, "Unable to update family logo at the moment.", err)
 		return
 	}
 
 	downloadURL, err := h.r2.CreatePresignedDownload(c.Request.Context(), req.ObjectKey)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate download url"})
+		respondInternalErrorWithMessage(c, "Unable to generate family logo download URL at the moment.", err)
 		return
 	}
 

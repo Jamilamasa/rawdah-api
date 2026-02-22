@@ -21,7 +21,7 @@ func (h *RewardHandler) List(c *gin.Context) {
 	familyID := c.GetString(string(models.ContextKeyFamilyID))
 	rewards, err := h.svc.List(c.Request.Context(), familyID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"rewards": rewards})
@@ -39,18 +39,18 @@ func (h *RewardHandler) Create(c *gin.Context) {
 		Icon        *string `json:"icon"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 
 	fid, err := uuid.Parse(familyID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 	uid, err := uuid.Parse(userID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 
@@ -64,7 +64,7 @@ func (h *RewardHandler) Create(c *gin.Context) {
 		CreatedBy:   uid,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, reward)
@@ -82,7 +82,7 @@ func (h *RewardHandler) Update(c *gin.Context) {
 		Icon        *string `json:"icon"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 
@@ -94,7 +94,7 @@ func (h *RewardHandler) Update(c *gin.Context) {
 		Icon:        req.Icon,
 	})
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 		return
 	}
 	c.JSON(http.StatusOK, reward)
@@ -105,7 +105,7 @@ func (h *RewardHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := h.svc.Delete(c.Request.Context(), id, familyID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})

@@ -60,6 +60,12 @@ type HadithQuizResult struct {
 	Questions []models.QuizQuestion
 }
 
+type TopicPackResult struct {
+	LessonContent string
+	Flashcards    []models.Flashcard
+	Questions     []models.QuizQuestion
+}
+
 // GenerateHadithQuiz calls the AI with a self-contained prompt that selects an authentic
 // hadith and generates quiz questions about it. Returns both the hadith and the questions.
 func (c *Client) GenerateHadithQuiz(prompt string) (*HadithQuizResult, error) {
@@ -83,6 +89,17 @@ func (c *Client) GenerateQuiz(prompt string) ([]models.QuizQuestion, error) {
 		}
 	}
 	return questions, nil
+}
+
+func (c *Client) GenerateTopicPack(prompt string, minQuestionCount int) (*TopicPackResult, error) {
+	result, err := c.callTopicModel(c.cfg.OpenRouterModel, prompt, minQuestionCount)
+	if err != nil {
+		result, err = c.callTopicModel(c.cfg.OpenRouterFallbackModel, prompt, minQuestionCount)
+		if err != nil {
+			return nil, fmt.Errorf("both AI models failed: %w", err)
+		}
+	}
+	return result, nil
 }
 
 func (c *Client) callHadithModel(model, prompt string) (*HadithQuizResult, error) {
@@ -177,6 +194,60 @@ func (c *Client) callModel(model, prompt string) ([]models.QuizQuestion, error) 
 	}
 
 	return wrapper.Questions, nil
+}
+
+func (c *Client) callTopicModel(model, prompt string, minQuestionCount int) (*TopicPackResult, error) {
+	req := openRouterRequest{
+		Model:          model,
+		Messages:       []openRouterMessage{{Role: "user", Content: prompt}},
+		ResponseFormat: openRouterResponseFormat{Type: "json_object"},
+	}
+
+	var resp openRouterResponse
+	httpResp, err := c.resty.R().
+		SetHeader("Authorization", "Bearer "+c.cfg.OpenRouterAPIKey).
+		SetHeader("Content-Type", "application/json").
+		SetBody(req).
+		SetResult(&resp).
+		Post("/chat/completions")
+	if err != nil {
+		return nil, fmt.Errorf("http error: %w", err)
+	}
+	if httpResp.StatusCode() >= 400 {
+		return nil, fmt.Errorf("API error %d: %s", httpResp.StatusCode(), httpResp.String())
+	}
+	if len(resp.Choices) == 0 {
+		return nil, fmt.Errorf("no choices in response")
+	}
+
+	jsonStr := extractJSONObject(resp.Choices[0].Message.Content)
+	var wrapper struct {
+		LessonContent string            `json:"lesson_content"`
+		Flashcards    []models.Flashcard `json:"flashcards"`
+		Questions     []models.QuizQuestion `json:"questions"`
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &wrapper); err != nil {
+		return nil, fmt.Errorf("failed to parse topic pack JSON: %w, content: %s", err, resp.Choices[0].Message.Content)
+	}
+
+	if wrapper.LessonContent == "" {
+		return nil, fmt.Errorf("topic lesson content is empty")
+	}
+	if len(wrapper.Flashcards) < 4 {
+		return nil, fmt.Errorf("expected at least 4 flashcards, got %d", len(wrapper.Flashcards))
+	}
+	if err := validateQuestions(wrapper.Questions); err != nil {
+		return nil, err
+	}
+	if len(wrapper.Questions) < minQuestionCount {
+		return nil, fmt.Errorf("expected at least %d questions, got %d", minQuestionCount, len(wrapper.Questions))
+	}
+
+	return &TopicPackResult{
+		LessonContent: wrapper.LessonContent,
+		Flashcards:    wrapper.Flashcards,
+		Questions:     wrapper.Questions,
+	}, nil
 }
 
 func extractJSONObject(content string) string {

@@ -135,3 +135,42 @@ Respond with exactly this JSON structure:
 		verse.Difficulty,
 	)
 }
+
+func BuildTopicPackPrompt(category, topic string, childAge, questionCount int) string {
+	ageContext := ""
+	if childAge > 0 {
+		ageContext = fmt.Sprintf(" The child is %d years old, so use age-appropriate language, examples, and depth.", childAge)
+	}
+
+	return fmt.Sprintf(`You are an educational content designer for children in a Muslim family app.
+Respond ONLY with valid JSON. No markdown. No text outside JSON.%s
+
+Create a "learn then quiz" pack for this category and topic:
+- category: %s
+- topic: %s
+- question_count: %d
+
+Requirements:
+- Produce clear, accurate, child-friendly educational content.
+- lesson_content: at least 5 short paragraphs in plain language.
+- flashcards: at least 8 flashcards, each with "front" and "back".
+- questions: exactly %d multiple-choice questions.
+- Each question must include 4 options labeled A/B/C/D, one correct answer, and a short explanation.
+- Ensure questions cover recall, comprehension, and application (not only factual memory).
+- Keep all content safe, age-appropriate, and non-graphic.
+
+JSON schema:
+{
+  "lesson_content": "string",
+  "flashcards": [{"front":"string","back":"string"}],
+  "questions": [
+    {
+      "id":"q1",
+      "question":"string",
+      "options":{"A":"string","B":"string","C":"string","D":"string"},
+      "correct_answer":"A",
+      "explanation":"string"
+    }
+  ]
+}`, ageContext, category, topic, questionCount, questionCount)
+}

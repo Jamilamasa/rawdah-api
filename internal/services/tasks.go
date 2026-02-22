@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+
 	"github.com/rawdah/rawdah-api/internal/mailer"
 	"github.com/rawdah/rawdah-api/internal/models"
 	"github.com/rawdah/rawdah-api/internal/repository"
@@ -15,12 +17,13 @@ import (
 )
 
 type TaskService struct {
-	taskRepo   *repository.TaskRepo
-	familyRepo *repository.FamilyRepo
-	notifRepo  *repository.NotificationRepo
-	xpSvc      *XPService
-	mailer     *mailer.Mailer
-	hub        *ws.Hub
+	taskRepo      *repository.TaskRepo
+	recurringRepo *repository.RecurringTaskRepo
+	familyRepo    *repository.FamilyRepo
+	notifRepo     *repository.NotificationRepo
+	xpSvc         *XPService
+	mailer        *mailer.Mailer
+	hub           *ws.Hub
 }
 
 var (
@@ -28,14 +31,15 @@ var (
 	ErrInvalidTaskData = errors.New("invalid task data")
 )
 
-func NewTaskService(taskRepo *repository.TaskRepo, familyRepo *repository.FamilyRepo, notifRepo *repository.NotificationRepo, xpSvc *XPService, m *mailer.Mailer, hub *ws.Hub) *TaskService {
+func NewTaskService(taskRepo *repository.TaskRepo, recurringRepo *repository.RecurringTaskRepo, familyRepo *repository.FamilyRepo, notifRepo *repository.NotificationRepo, xpSvc *XPService, m *mailer.Mailer, hub *ws.Hub) *TaskService {
 	return &TaskService{
-		taskRepo:   taskRepo,
-		familyRepo: familyRepo,
-		notifRepo:  notifRepo,
-		xpSvc:      xpSvc,
-		mailer:     m,
-		hub:        hub,
+		taskRepo:      taskRepo,
+		recurringRepo: recurringRepo,
+		familyRepo:    familyRepo,
+		notifRepo:     notifRepo,
+		xpSvc:         xpSvc,
+		mailer:        m,
+		hub:           hub,
 	}
 }
 
@@ -51,6 +55,10 @@ type CreateTaskInput struct {
 
 func (s *TaskService) ListTasks(ctx context.Context, familyID string, filter repository.TaskFilter) ([]*models.Task, error) {
 	return s.taskRepo.List(ctx, familyID, filter)
+}
+
+func (s *TaskService) ListDueRewards(ctx context.Context, familyID string, filter repository.DueRewardFilter) ([]*models.DueReward, error) {
+	return s.taskRepo.ListDueRewards(ctx, familyID, filter)
 }
 
 func (s *TaskService) CreateTask(ctx context.Context, input CreateTaskInput) (*models.Task, error) {
@@ -252,4 +260,75 @@ func (s *TaskService) DeclineReward(ctx context.Context, id, familyID string) (*
 		}},
 	})
 	return updated, nil
+}
+
+// --- Recurring tasks ---
+
+type CreateRecurringTaskInput struct {
+	FamilyID    uuid.UUID
+	Title       string
+	Description *string
+	AssignedTo  uuid.UUID
+	CreatedBy   uuid.UUID
+	RewardID    *uuid.UUID
+}
+
+func (s *TaskService) CreateRecurringTask(ctx context.Context, input CreateRecurringTaskInput) (*models.RecurringTask, error) {
+	title := strings.TrimSpace(input.Title)
+	if title == "" || len(title) > 160 {
+		return nil, ErrInvalidTaskData
+	}
+
+	assignee, err := s.familyRepo.GetMemberByID(ctx, input.AssignedTo.String(), input.FamilyID.String())
+	if err != nil || !assignee.IsActive || assignee.Role != "child" {
+		return nil, ErrInvalidAssignee
+	}
+
+	t := &models.RecurringTask{
+		FamilyID:    input.FamilyID,
+		Title:       title,
+		Description: input.Description,
+		AssignedTo:  input.AssignedTo,
+		CreatedBy:   input.CreatedBy,
+		RewardID:    input.RewardID,
+		IsActive:    true,
+	}
+
+	if err := s.recurringRepo.Create(ctx, t); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func (s *TaskService) ListRecurringTasks(ctx context.Context, familyID string) ([]*models.RecurringTask, error) {
+	return s.recurringRepo.List(ctx, familyID)
+}
+
+func (s *TaskService) DeleteRecurringTask(ctx context.Context, id, familyID string) error {
+	return s.recurringRepo.Delete(ctx, id, familyID)
+}
+
+func (s *TaskService) TriggerWeekendTasks(ctx context.Context) (triggered int, errs int, err error) {
+	templates, err := s.recurringRepo.ListAllActive(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	for _, tmpl := range templates {
+		_, createErr := s.CreateTask(ctx, CreateTaskInput{
+			FamilyID:    tmpl.FamilyID,
+			Title:       tmpl.Title,
+			Description: tmpl.Description,
+			AssignedTo:  tmpl.AssignedTo,
+			CreatedBy:   tmpl.CreatedBy,
+			RewardID:    tmpl.RewardID,
+		})
+		if createErr != nil {
+			log.Error().Err(createErr).Str("recurring_task_id", tmpl.ID.String()).Msg("failed to create task from recurring template")
+			errs++
+		} else {
+			triggered++
+		}
+	}
+	return triggered, errs, nil
 }

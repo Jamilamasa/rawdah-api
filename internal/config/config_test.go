@@ -12,6 +12,7 @@ func validConfig() *Config {
 		Env:                   "production",
 		AllowedOrigins:        []string{"https://app.rawdah.app"},
 		DatabaseURL:           "postgres://example",
+		AutoMigrate:           true,
 		JWTAccessSecret:       strings.Repeat("a", 64),
 		JWTRefreshSecret:      strings.Repeat("b", 64),
 		AccessTokenTTL:        15 * time.Minute,

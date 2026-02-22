@@ -33,7 +33,7 @@ func (h *DashboardHandler) Summary(c *gin.Context) {
 	familyID := c.GetString(string(models.ContextKeyFamilyID))
 	summary, err := h.svc.Summary(c.Request.Context(), familyID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, summary)
@@ -45,7 +45,7 @@ func (h *DashboardHandler) TaskCompletion(c *gin.Context) {
 
 	data, err := h.svc.TaskCompletion(c.Request.Context(), familyID, days)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data, "days": days})
@@ -57,7 +57,7 @@ func (h *DashboardHandler) GameTime(c *gin.Context) {
 
 	data, err := h.svc.GameTime(c.Request.Context(), familyID, days)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data, "days": days})
@@ -69,7 +69,7 @@ func (h *DashboardHandler) QuizScores(c *gin.Context) {
 
 	data, err := h.svc.QuizScores(c.Request.Context(), familyID, days)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data, "days": days})
@@ -79,7 +79,7 @@ func (h *DashboardHandler) LearnProgress(c *gin.Context) {
 	familyID := c.GetString(string(models.ContextKeyFamilyID))
 	data, err := h.svc.LearnProgress(c.Request.Context(), familyID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data})

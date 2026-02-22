@@ -14,6 +14,7 @@ type Config struct {
 	AllowedOrigins []string
 
 	DatabaseURL string
+	AutoMigrate bool
 
 	JWTAccessSecret  string
 	JWTRefreshSecret string
@@ -31,6 +32,9 @@ type Config struct {
 	BrevoSenderEmail string
 	BrevoSenderName  string
 
+	AdultPlatformURL string
+	KidsPlatformURL  string
+
 	OpenRouterAPIKey        string
 	OpenRouterModel         string
 	OpenRouterFallbackModel string
@@ -38,6 +42,8 @@ type Config struct {
 	VAPIDPublicKey  string
 	VAPIDPrivateKey string
 	VAPIDSubject    string
+
+	CronSecret string
 }
 
 func Load() (*Config, error) {
@@ -56,6 +62,9 @@ func Load() (*Config, error) {
 	viper.SetDefault("OPENROUTER_MODEL", "google/gemma-2-9b-it")
 	viper.SetDefault("OPENROUTER_FALLBACK_MODEL", "mistralai/mistral-7b-instruct")
 	viper.SetDefault("PRESIGN_EXPIRES_SECONDS", 600)
+	viper.SetDefault("AUTO_MIGRATE", true)
+	viper.SetDefault("ADULT_PLATFORM_URL", "https://app.rawdah.app")
+	viper.SetDefault("KIDS_PLATFORM_URL", "https://kids.rawdah.app")
 
 	accessTTL, err := time.ParseDuration(viper.GetString("ACCESS_TOKEN_TTL"))
 	if err != nil {
@@ -87,6 +96,7 @@ func Load() (*Config, error) {
 		AllowedOrigins: origins,
 
 		DatabaseURL: viper.GetString("DATABASE_URL"),
+		AutoMigrate: viper.GetBool("AUTO_MIGRATE"),
 
 		JWTAccessSecret:  viper.GetString("JWT_ACCESS_SECRET"),
 		JWTRefreshSecret: viper.GetString("JWT_REFRESH_SECRET"),
@@ -103,6 +113,8 @@ func Load() (*Config, error) {
 		BrevoAPIKey:      viper.GetString("BREVO_API_KEY"),
 		BrevoSenderEmail: viper.GetString("BREVO_SENDER_EMAIL"),
 		BrevoSenderName:  viper.GetString("BREVO_SENDER_NAME"),
+		AdultPlatformURL: viper.GetString("ADULT_PLATFORM_URL"),
+		KidsPlatformURL:  viper.GetString("KIDS_PLATFORM_URL"),
 
 		OpenRouterAPIKey:        viper.GetString("OPENROUTER_API_KEY"),
 		OpenRouterModel:         viper.GetString("OPENROUTER_MODEL"),
@@ -111,6 +123,8 @@ func Load() (*Config, error) {
 		VAPIDPublicKey:  viper.GetString("VAPID_PUBLIC_KEY"),
 		VAPIDPrivateKey: viper.GetString("VAPID_PRIVATE_KEY"),
 		VAPIDSubject:    viper.GetString("VAPID_SUBJECT"),
+
+		CronSecret: viper.GetString("CRON_SECRET"),
 	}
 
 	if err := validate(cfg); err != nil {

@@ -4,10 +4,11 @@ run:
 	go run ./cmd/api
 
 migrate:
-	migrate -path ./migrations -database "$(DATABASE_URL)" up
+	go run ./cmd/migrate
 
 migrate-down:
-	migrate -path ./migrations -database "$(DATABASE_URL)" down 1
+	@echo "migrate-down is not supported because no *.down.sql migrations are defined"
+	@exit 1
 
 seed:
 	go run ./scripts/seed_hadiths.go

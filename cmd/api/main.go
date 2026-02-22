@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
+	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -16,6 +20,7 @@ import (
 	"github.com/rawdah/rawdah-api/internal/handlers"
 	"github.com/rawdah/rawdah-api/internal/mailer"
 	"github.com/rawdah/rawdah-api/internal/middleware"
+	"github.com/rawdah/rawdah-api/internal/migrate"
 	"github.com/rawdah/rawdah-api/internal/push"
 	"github.com/rawdah/rawdah-api/internal/repository"
 	"github.com/rawdah/rawdah-api/internal/services"
@@ -38,6 +43,10 @@ func main() {
 		log.Logger = zerolog.New(os.Stderr).With().Timestamp().Logger()
 	}
 
+	if cfg.CronSecret == "" {
+		log.Warn().Msg("CRON_SECRET is not set — /cron/weekend-tasks endpoint is effectively disabled")
+	}
+
 	// Connect to DB
 	db, err := repository.Connect(cfg.DatabaseURL)
 	if err != nil {
@@ -45,6 +54,15 @@ func main() {
 	}
 	defer db.Close()
 	log.Info().Msg("connected to database")
+
+	if cfg.AutoMigrate {
+		migrationCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if err := migrate.Run(migrationCtx, db); err != nil {
+			log.Fatal().Err(err).Msg("failed to run database migrations")
+		}
+		log.Info().Msg("database migrations applied")
+	}
 
 	// Create repositories
 	authRepo := repository.NewAuthRepo(db)
@@ -65,6 +83,7 @@ func main() {
 	notifRepo := repository.NewNotificationRepo(db)
 	pushRepo := repository.NewPushRepo(db)
 	xpRepo := repository.NewXPRepo(db)
+	recurringTaskRepo := repository.NewRecurringTaskRepo(db)
 
 	// Setup WebSocket hub
 	hub := ws.NewHub()
@@ -87,8 +106,8 @@ func main() {
 	// Create services
 	xpSvc := services.NewXPService(xpRepo, quizRepo, lessonRepo)
 	authSvc := services.NewAuthService(db, authRepo, userRepo, familyRepo, cfg)
-	familySvc := services.NewFamilyService(familyRepo, xpRepo)
-	taskSvc := services.NewTaskService(taskRepo, familyRepo, notifRepo, xpSvc, m, hub)
+	familySvc := services.NewFamilyService(familyRepo, xpRepo, m, cfg.AdultPlatformURL, cfg.KidsPlatformURL)
+	taskSvc := services.NewTaskService(taskRepo, recurringTaskRepo, familyRepo, notifRepo, xpSvc, m, hub)
 	rewardSvc := services.NewRewardService(rewardRepo)
 	quizSvc := services.NewQuizService(quizRepo, hadithRepo, prophetRepo, quranRepo, familyRepo, notifRepo, xpSvc, aiClient, m, hub)
 	lessonSvc := services.NewLessonService(lessonRepo, quizRepo, quranRepo, familyRepo, xpSvc, hub)
@@ -103,6 +122,7 @@ func main() {
 	authH := handlers.NewAuthHandler(authSvc, r2Client)
 	familyH := handlers.NewFamilyHandler(familySvc, r2Client)
 	taskH := handlers.NewTaskHandler(taskSvc)
+	recurringH := handlers.NewRecurringTaskHandler(taskSvc, cfg)
 	rewardH := handlers.NewRewardHandler(rewardSvc)
 	hadithH := handlers.NewHadithHandler(hadithRepo)
 	prophetH := handlers.NewProphetHandler(prophetRepo)
@@ -125,8 +145,9 @@ func main() {
 
 	// Setup Gin router
 	r := gin.New()
-	r.Use(gin.Recovery())
+	r.Use(requestIDMiddleware())
 	r.Use(zerologMiddleware())
+	r.Use(recoveryMiddleware())
 	r.Use(securityHeadersMiddleware())
 	r.Use(corsMiddleware(cfg.AllowedOrigins))
 
@@ -179,8 +200,14 @@ func main() {
 		v1.PUT("/family/access-control/:grantee_id", middleware.RoleGuard("parent"), familyH.SetAccessControl)
 		v1.DELETE("/family/access-control/:grantee_id", middleware.RoleGuard("parent"), familyH.RevokeAccessControl)
 
+		// Tasks — recurring routes must be registered before /tasks/:id
+		v1.GET("/tasks/recurring", middleware.RoleGuard("parent", "adult_relative"), adultCanAssignTasks, recurringH.List)
+		v1.POST("/tasks/recurring", middleware.RoleGuard("parent", "adult_relative"), adultCanAssignTasks, recurringH.Create)
+		v1.DELETE("/tasks/recurring/:id", middleware.RoleGuard("parent", "adult_relative"), adultCanAssignTasks, recurringH.Delete)
+
 		// Tasks
 		v1.GET("/tasks", adultCanViewTasks, taskH.List)
+		v1.GET("/tasks/due-rewards", adultCanViewTasks, taskH.ListDueRewards)
 		v1.POST("/tasks", middleware.RoleGuard("parent", "adult_relative"), adultCanAssignTasks, taskH.Create)
 		v1.GET("/tasks/:id", adultCanViewTasks, taskH.Get)
 		v1.PATCH("/tasks/:id", middleware.RoleGuard("parent", "adult_relative"), adultCanAssignTasks, taskH.Update)
@@ -208,9 +235,11 @@ func main() {
 		v1.GET("/quran/verses/:id", quranH.GetVerse)
 
 		// Quizzes
+		v1.POST("/quizzes/hadith/self", middleware.RoleGuard("child"), quizH.SelfAssignHadith)
 		v1.POST("/quizzes/hadith", middleware.RoleGuard("parent", "adult_relative"), adultCanManageQuizzes, quizH.AssignHadith)
 		v1.POST("/quizzes/prophet", middleware.RoleGuard("parent", "adult_relative"), adultCanManageQuizzes, quizH.AssignProphet)
 		v1.POST("/quizzes/quran", middleware.RoleGuard("parent", "adult_relative"), adultCanManageQuizzes, quizH.AssignQuran)
+		v1.POST("/quizzes/topic", middleware.RoleGuard("parent", "adult_relative"), adultCanManageQuizzes, quizH.AssignTopic)
 		v1.GET("/quizzes", middleware.RoleGuard("parent", "adult_relative"), adultCanManageQuizzes, quizH.List)
 		v1.GET("/quizzes/my", middleware.RoleGuard("child"), quizH.ListMine)
 		v1.GET("/quizzes/:type/:id", adultCanManageQuizzes, quizH.Get)
@@ -293,6 +322,10 @@ func main() {
 		}
 	}
 
+	// Cron trigger — no auth middleware
+	cron := r.Group("/cron")
+	cron.POST("/weekend-tasks", recurringH.TriggerWeekend)
+
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Info().Str("addr", addr).Msg("starting server")
 	if err := r.Run(addr); err != nil {
@@ -307,21 +340,89 @@ func zerologMiddleware() gin.HandlerFunc {
 
 		status := c.Writer.Status()
 		evt := log.Info()
-		if status >= http.StatusInternalServerError {
-			evt = log.Error().
-				Str("user_id", c.GetString("user_id")).
-				Str("family_id", c.GetString("family_id")).
-				Str("error", c.Errors.String())
+		switch {
+		case status >= http.StatusInternalServerError:
+			evt = log.Error()
+		case status >= http.StatusBadRequest:
+			evt = log.Warn()
 		}
 
-		evt.
+		route := c.FullPath()
+		if route == "" {
+			route = c.Request.URL.Path
+		}
+
+		evt = evt.
+			Str("request_id", c.GetString("request_id")).
 			Str("method", c.Request.Method).
+			Str("route", route).
 			Str("path", c.Request.URL.Path).
 			Int("status", status).
+			Str("status_text", http.StatusText(status)).
 			Dur("latency", time.Since(start)).
+			Int("bytes_out", c.Writer.Size()).
 			Str("ip", c.ClientIP()).
-			Msg("request")
+			Str("user_agent", c.Request.UserAgent())
+
+		if userID := c.GetString("user_id"); userID != "" {
+			evt = evt.Str("user_id", userID)
+		}
+		if familyID := c.GetString("family_id"); familyID != "" {
+			evt = evt.Str("family_id", familyID)
+		}
+		if strings.TrimSpace(c.Request.URL.RawQuery) != "" {
+			evt = evt.Bool("has_query", true)
+		}
+		if len(c.Errors) > 0 {
+			errs := make([]string, 0, len(c.Errors))
+			for _, e := range c.Errors {
+				errs = append(errs, e.Error())
+			}
+			evt = evt.Strs("errors", errs)
+		}
+
+		evt.Msg("http_request")
 	}
+}
+
+func requestIDMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		reqID := strings.TrimSpace(c.GetHeader("X-Request-ID"))
+		if reqID == "" {
+			reqID = uuid.NewString()
+		}
+		c.Set("request_id", reqID)
+		c.Header("X-Request-ID", reqID)
+		c.Next()
+	}
+}
+
+func recoveryMiddleware() gin.HandlerFunc {
+	return gin.CustomRecovery(func(c *gin.Context, recovered interface{}) {
+		reqID := c.GetString("request_id")
+		evt := log.Error().
+			Str("request_id", reqID).
+			Str("method", c.Request.Method).
+			Str("path", c.Request.URL.Path).
+			Str("ip", c.ClientIP()).
+			Interface("panic", recovered).
+			Bytes("stack", debug.Stack())
+		if userID := c.GetString("user_id"); userID != "" {
+			evt = evt.Str("user_id", userID)
+		}
+		if familyID := c.GetString("family_id"); familyID != "" {
+			evt = evt.Str("family_id", familyID)
+		}
+		evt.Msg("panic_recovered")
+
+		body := gin.H{
+			"error": "The server encountered an unexpected error while processing your request.",
+		}
+		if reqID != "" {
+			body["request_id"] = reqID
+		}
+		c.AbortWithStatusJSON(http.StatusInternalServerError, body)
+	})
 }
 
 func securityHeadersMiddleware() gin.HandlerFunc {
@@ -360,14 +461,14 @@ func corsMiddleware(allowedOrigins []string) gin.HandlerFunc {
 
 		if c.Request.Method == http.MethodOptions {
 			if origin != "" && !originAllowed {
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "origin not allowed"})
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Request origin is not allowed."})
 				return
 			}
 			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 		if origin != "" && !originAllowed {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "origin not allowed"})
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Request origin is not allowed."})
 			return
 		}
 		c.Next()

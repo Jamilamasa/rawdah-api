@@ -21,7 +21,7 @@ func (h *RequestHandler) List(c *gin.Context) {
 	familyID := c.GetString(string(models.ContextKeyFamilyID))
 	requests, err := h.svc.List(c.Request.Context(), familyID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"requests": requests})
@@ -37,18 +37,18 @@ func (h *RequestHandler) Create(c *gin.Context) {
 		Description *string `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 
 	fid, err := uuid.Parse(familyID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 	rid, err := uuid.Parse(requesterID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 
@@ -56,7 +56,7 @@ func (h *RequestHandler) Create(c *gin.Context) {
 	if req.TargetID != nil {
 		tid, err := uuid.Parse(*req.TargetID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid target_id"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Target user ID format is invalid."})
 			return
 		}
 		targetID = &tid
@@ -71,14 +71,14 @@ func (h *RequestHandler) Create(c *gin.Context) {
 	})
 	if err != nil {
 		if err == services.ErrInvalidRequestData {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid request data"})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "The request payload is invalid for this action."})
 			return
 		}
 		if err == services.ErrInvalidRequestTarget {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, request)
@@ -90,7 +90,7 @@ func (h *RequestHandler) Get(c *gin.Context) {
 
 	request, err := h.svc.GetByID(c.Request.Context(), id, familyID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 		return
 	}
 	c.JSON(http.StatusOK, request)
@@ -106,13 +106,13 @@ func (h *RequestHandler) Respond(c *gin.Context) {
 		Message *string `json:"message"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 
 	respondedBy, err := uuid.Parse(responderID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 
@@ -124,7 +124,7 @@ func (h *RequestHandler) Respond(c *gin.Context) {
 		RespondedBy: respondedBy,
 	})
 	if err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "unable to respond to request"})
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Request cannot be responded to in its current state."})
 		return
 	}
 	c.JSON(http.StatusOK, request)

@@ -44,23 +44,23 @@ func (h *WSHandler) ServeWS(c *gin.Context) {
 	familyID := c.GetString(string(models.ContextKeyFamilyID))
 
 	if userID == "" || familyID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 
 	origin := c.GetHeader("Origin")
 	if origin == "" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "origin not allowed"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "Request origin is not allowed."})
 		return
 	}
 	if _, ok := h.allowedOrigins[origin]; !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "origin not allowed"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "Request origin is not allowed."})
 		return
 	}
 
 	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "websocket upgrade failed"})
+		respondInternalErrorWithMessage(c, "Unable to establish websocket connection at the moment.", err)
 		return
 	}
 

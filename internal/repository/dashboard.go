@@ -36,7 +36,8 @@ func (r *DashboardRepo) Summary(ctx context.Context, familyID string) (*Dashboar
 		   (SELECT (
 		     (SELECT COUNT(*) FROM hadith_quizzes WHERE family_id = $1 AND status = 'completed') +
 		     (SELECT COUNT(*) FROM prophet_quizzes WHERE family_id = $1 AND status = 'completed') +
-		     (SELECT COUNT(*) FROM quran_quizzes WHERE family_id = $1 AND status = 'completed')
+		     (SELECT COUNT(*) FROM quran_quizzes WHERE family_id = $1 AND status = 'completed') +
+		     (SELECT COUNT(*) FROM topic_quizzes WHERE family_id = $1 AND status = 'completed')
 		   )) AS quizzes_completed`,
 		familyID,
 	).Scan(&s.TotalMembers, &s.ActiveTasks, &s.CompletedTasks, &s.PendingRequests, &s.TotalGameMinutes, &s.QuizzesCompleted)
@@ -55,7 +56,7 @@ func (r *DashboardRepo) TaskCompletion(ctx context.Context, familyID string, day
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT DATE(completed_at)::TEXT AS day, COUNT(*) AS count
 		 FROM tasks
-		 WHERE family_id = $1 AND completed_at >= NOW() - ($2 || ' days')::INTERVAL
+		 WHERE family_id = $1 AND completed_at >= NOW() - ($2 * INTERVAL '1 day')
 		 GROUP BY day ORDER BY day ASC`,
 		familyID, days,
 	)
@@ -84,7 +85,7 @@ func (r *DashboardRepo) GameTime(ctx context.Context, familyID string, days int)
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT DATE(started_at)::TEXT AS day, COALESCE(SUM(duration_seconds) / 60, 0) AS minutes
 		 FROM game_sessions
-		 WHERE family_id = $1 AND started_at >= NOW() - ($2 || ' days')::INTERVAL
+		 WHERE family_id = $1 AND started_at >= NOW() - ($2 * INTERVAL '1 day')
 		 GROUP BY day ORDER BY day ASC`,
 		familyID, days,
 	)
@@ -169,6 +170,26 @@ func (r *DashboardRepo) QuizScores(ctx context.Context, familyID string, days in
 	for rows3.Next() {
 		var e QuizScoreEntry
 		if err := rows3.Scan(&e.Date, &e.QuizType, &e.AvgScore); err != nil {
+			return nil, err
+		}
+		result = append(result, &e)
+	}
+
+	// Topic quizzes
+	rows4, err := r.db.QueryContext(ctx,
+		`SELECT DATE(completed_at)::TEXT AS day, 'topic' AS quiz_type, AVG(score) AS avg_score
+		 FROM topic_quizzes
+		 WHERE family_id = $1 AND status = 'completed' AND completed_at >= $2
+		 GROUP BY day ORDER BY day ASC`,
+		familyID, cutoff,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows4.Close()
+	for rows4.Next() {
+		var e QuizScoreEntry
+		if err := rows4.Scan(&e.Date, &e.QuizType, &e.AvgScore); err != nil {
 			return nil, err
 		}
 		result = append(result, &e)

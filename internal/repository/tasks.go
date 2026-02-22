@@ -23,6 +23,11 @@ type TaskFilter struct {
 	AssignedTo string
 }
 
+type DueRewardFilter struct {
+	Status     string
+	AssignedTo string
+}
+
 func (r *TaskRepo) List(ctx context.Context, familyID string, filter TaskFilter) ([]*models.Task, error) {
 	query := `SELECT id, family_id, title, description, assigned_to, created_by, reward_id,
 	                 status, due_date, completed_at, created_at
@@ -45,6 +50,51 @@ func (r *TaskRepo) List(ctx context.Context, familyID string, filter TaskFilter)
 	var tasks []*models.Task
 	err := r.db.SelectContext(ctx, &tasks, query, args...)
 	return tasks, err
+}
+
+func (r *TaskRepo) ListDueRewards(ctx context.Context, familyID string, filter DueRewardFilter) ([]*models.DueReward, error) {
+	query := `SELECT
+		t.id AS task_id,
+		t.title AS task_title,
+		t.description AS task_description,
+		t.status AS task_status,
+		t.due_date AS task_due_date,
+		t.completed_at AS task_completed_at,
+		t.created_at AS task_created_at,
+		u.id AS child_id,
+		u.name AS child_name,
+		r.id AS reward_id,
+		r.title AS reward_title,
+		r.description AS reward_description,
+		r.value AS reward_value,
+		r.type AS reward_type,
+		r.icon AS reward_icon
+	FROM tasks t
+	JOIN users u ON u.id = t.assigned_to AND u.family_id = t.family_id
+	JOIN rewards r ON r.id = t.reward_id AND r.family_id = t.family_id
+	WHERE t.family_id = $1
+	  AND t.status IN ('reward_requested', 'reward_approved')`
+	args := []interface{}{familyID}
+	argIdx := 2
+
+	if filter.Status != "" {
+		query += fmt.Sprintf(" AND t.status = $%d", argIdx)
+		args = append(args, filter.Status)
+		argIdx++
+	}
+	if filter.AssignedTo != "" {
+		query += fmt.Sprintf(" AND t.assigned_to = $%d", argIdx)
+		args = append(args, filter.AssignedTo)
+		argIdx++
+	}
+
+	query += " ORDER BY t.completed_at DESC NULLS LAST, t.created_at DESC"
+
+	var dueRewards []*models.DueReward
+	if err := r.db.SelectContext(ctx, &dueRewards, query, args...); err != nil {
+		return nil, err
+	}
+	return dueRewards, nil
 }
 
 func (r *TaskRepo) Create(ctx context.Context, task *models.Task) error {

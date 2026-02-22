@@ -25,28 +25,27 @@ func (h *QuizHandler) AssignHadith(c *gin.Context) {
 
 	var req struct {
 		AssignedTo    string     `json:"assigned_to"    binding:"required"`
-		ChildAge      int        `json:"child_age"`
 		Difficulty    string     `json:"difficulty"`
 		MemorizeUntil *time.Time `json:"memorize_until"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 
 	fid, err := uuid.Parse(familyID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 	aid, err := uuid.Parse(req.AssignedTo)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid assigned_to"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Assigned user ID format is invalid."})
 		return
 	}
 	abid, err := uuid.Parse(assignedBy)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 
@@ -54,20 +53,52 @@ func (h *QuizHandler) AssignHadith(c *gin.Context) {
 		FamilyID:      fid,
 		AssignedTo:    aid,
 		AssignedBy:    abid,
-		ChildAge:      req.ChildAge,
 		Difficulty:    req.Difficulty,
 		MemorizeUntil: req.MemorizeUntil,
 	})
 	if err != nil {
 		if err == services.ErrInvalidQuizAssignee {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
 		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, quiz)
+}
+
+func (h *QuizHandler) SelfAssignHadith(c *gin.Context) {
+	familyID := c.GetString(string(models.ContextKeyFamilyID))
+	userID := c.GetString(string(models.ContextKeyUserID))
+
+	var req struct {
+		Difficulty string `json:"difficulty"`
+	}
+	// body is optional — ignore bind errors
+	_ = c.ShouldBindJSON(&req)
+
+	fid, err := uuid.Parse(familyID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
+		return
+	}
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
+		return
+	}
+
+	quiz, err := h.svc.SelfAssignHadith(c.Request.Context(), services.SelfAssignHadithInput{
+		FamilyID:   fid,
+		UserID:     uid,
+		Difficulty: req.Difficulty,
+	})
+	if err != nil {
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, quiz)
@@ -80,31 +111,30 @@ func (h *QuizHandler) AssignProphet(c *gin.Context) {
 	var req struct {
 		ProphetID  string `json:"prophet_id"  binding:"required"`
 		AssignedTo string `json:"assigned_to" binding:"required"`
-		ChildAge   int    `json:"child_age"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 
 	fid, err := uuid.Parse(familyID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 	pid, err := uuid.Parse(req.ProphetID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid prophet_id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Prophet ID format is invalid."})
 		return
 	}
 	aid, err := uuid.Parse(req.AssignedTo)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid assigned_to"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Assigned user ID format is invalid."})
 		return
 	}
 	abid, err := uuid.Parse(assignedBy)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 
@@ -113,18 +143,17 @@ func (h *QuizHandler) AssignProphet(c *gin.Context) {
 		ProphetID:  pid,
 		AssignedTo: aid,
 		AssignedBy: abid,
-		ChildAge:   req.ChildAge,
 	})
 	if err != nil {
 		if err == services.ErrInvalidQuizAssignee {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
 		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, quiz)
@@ -138,31 +167,30 @@ func (h *QuizHandler) AssignQuran(c *gin.Context) {
 		VerseID    string  `json:"verse_id"    binding:"required"`
 		LessonID   *string `json:"lesson_id"`
 		AssignedTo string  `json:"assigned_to" binding:"required"`
-		ChildAge   int     `json:"child_age"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 
 	fid, err := uuid.Parse(familyID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 	vid, err := uuid.Parse(req.VerseID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid verse_id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Verse ID format is invalid."})
 		return
 	}
 	aid, err := uuid.Parse(req.AssignedTo)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid assigned_to"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Assigned user ID format is invalid."})
 		return
 	}
 	abid, err := uuid.Parse(assignedBy)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
 		return
 	}
 
@@ -170,7 +198,7 @@ func (h *QuizHandler) AssignQuran(c *gin.Context) {
 	if req.LessonID != nil {
 		lid, err := uuid.Parse(*req.LessonID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid lesson_id"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Lesson ID format is invalid."})
 			return
 		}
 		lessonID = &lid
@@ -182,20 +210,74 @@ func (h *QuizHandler) AssignQuran(c *gin.Context) {
 		LessonID:   lessonID,
 		AssignedTo: aid,
 		AssignedBy: abid,
-		ChildAge:   req.ChildAge,
 	})
 	if err != nil {
 		if err == services.ErrInvalidQuizAssignee {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
 		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
+	c.JSON(http.StatusCreated, quiz)
+}
+
+func (h *QuizHandler) AssignTopic(c *gin.Context) {
+	familyID := c.GetString(string(models.ContextKeyFamilyID))
+	assignedBy := c.GetString(string(models.ContextKeyUserID))
+
+	var req struct {
+		AssignedTo    string `json:"assigned_to" binding:"required"`
+		Category      string `json:"category" binding:"required"`
+		Topic         string `json:"topic" binding:"required"`
+		QuestionCount int    `json:"question_count"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
+		return
+	}
+
+	fid, err := uuid.Parse(familyID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
+		return
+	}
+	aid, err := uuid.Parse(req.AssignedTo)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Assigned user ID format is invalid."})
+		return
+	}
+	abid, err := uuid.Parse(assignedBy)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication is required or your session is invalid."})
+		return
+	}
+
+	quiz, err := h.svc.AssignTopic(c.Request.Context(), services.AssignTopicInput{
+		FamilyID:      fid,
+		AssignedTo:    aid,
+		AssignedBy:    abid,
+		Category:      req.Category,
+		Topic:         req.Topic,
+		QuestionCount: req.QuestionCount,
+	})
+	if err != nil {
+		if err == services.ErrInvalidQuizAssignee {
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
+			return
+		}
+		if err == services.ErrInvalidTopicQuizData {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Topic quiz data is invalid for this operation."})
+			return
+		}
+		respondInternalError(c, err)
+		return
+	}
+
 	c.JSON(http.StatusCreated, quiz)
 }
 
@@ -213,6 +295,7 @@ func (h *QuizHandler) List(c *gin.Context) {
 		HadithQuizzes  interface{} `json:"hadith_quizzes,omitempty"`
 		ProphetQuizzes interface{} `json:"prophet_quizzes,omitempty"`
 		QuranQuizzes   interface{} `json:"quran_quizzes,omitempty"`
+		TopicQuizzes   interface{} `json:"topic_quizzes,omitempty"`
 	}
 
 	resp := QuizListResponse{}
@@ -235,6 +318,12 @@ func (h *QuizHandler) List(c *gin.Context) {
 			resp.QuranQuizzes = quizzes
 		}
 	}
+	if quizType == "" || quizType == "topic" {
+		quizzes, err := h.svc.ListTopicQuizzes(c.Request.Context(), familyID)
+		if err == nil {
+			resp.TopicQuizzes = quizzes
+		}
+	}
 
 	c.JSON(http.StatusOK, resp)
 }
@@ -247,6 +336,7 @@ func (h *QuizHandler) ListMine(c *gin.Context) {
 		HadithQuizzes  interface{} `json:"hadith_quizzes"`
 		ProphetQuizzes interface{} `json:"prophet_quizzes"`
 		QuranQuizzes   interface{} `json:"quran_quizzes"`
+		TopicQuizzes   interface{} `json:"topic_quizzes"`
 	}
 
 	resp := MyQuizzes{}
@@ -254,10 +344,12 @@ func (h *QuizHandler) ListMine(c *gin.Context) {
 	hq, _ := h.svc.ListMyHadithQuizzes(c.Request.Context(), userID, familyID)
 	pq, _ := h.svc.ListMyProphetQuizzes(c.Request.Context(), userID, familyID)
 	qq, _ := h.svc.ListMyQuranQuizzes(c.Request.Context(), userID, familyID)
+	tq, _ := h.svc.ListMyTopicQuizzes(c.Request.Context(), userID, familyID)
 
 	resp.HadithQuizzes = hq
 	resp.ProphetQuizzes = pq
 	resp.QuranQuizzes = qq
+	resp.TopicQuizzes = tq
 
 	c.JSON(http.StatusOK, resp)
 }
@@ -273,38 +365,49 @@ func (h *QuizHandler) Get(c *gin.Context) {
 	case "hadith":
 		quiz, err := h.svc.GetHadithQuiz(c.Request.Context(), id, familyID)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
 		if role == "child" && quiz.AssignedTo.String() != userID {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
 		c.JSON(http.StatusOK, quiz)
 	case "prophet":
 		quiz, err := h.svc.GetProphetQuiz(c.Request.Context(), id, familyID)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
 		if role == "child" && quiz.AssignedTo.String() != userID {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
 		c.JSON(http.StatusOK, quiz)
 	case "quran":
 		quiz, err := h.svc.GetQuranQuiz(c.Request.Context(), id, familyID)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
 		if role == "child" && quiz.AssignedTo.String() != userID {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
+			return
+		}
+		c.JSON(http.StatusOK, quiz)
+	case "topic":
+		quiz, err := h.svc.GetTopicQuiz(c.Request.Context(), id, familyID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
+			return
+		}
+		if role == "child" && quiz.AssignedTo.String() != userID {
+			c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 			return
 		}
 		c.JSON(http.StatusOK, quiz)
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid quiz type"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Quiz type is invalid. Allowed values: hadith, prophet, quran, topic."})
 	}
 }
 
@@ -322,13 +425,15 @@ func (h *QuizHandler) Start(c *gin.Context) {
 		err = h.svc.StartProphetQuiz(c.Request.Context(), id, familyID, userID)
 	case "quran":
 		err = h.svc.StartQuranQuiz(c.Request.Context(), id, familyID, userID)
+	case "topic":
+		err = h.svc.StartTopicQuiz(c.Request.Context(), id, familyID, userID)
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid quiz type"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Quiz type is invalid. Allowed values: hadith, prophet, quran, topic."})
 		return
 	}
 
 	if err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "unable to start quiz"})
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Quiz cannot be started in its current state."})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "quiz started"})
@@ -344,7 +449,7 @@ func (h *QuizHandler) Submit(c *gin.Context) {
 		Answers []models.QuizAnswer `json:"answers" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
 		return
 	}
 
@@ -357,25 +462,32 @@ func (h *QuizHandler) Submit(c *gin.Context) {
 	case "hadith":
 		result, err := h.svc.SubmitHadithQuiz(c.Request.Context(), id, familyID, input)
 		if err != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "unable to submit quiz"})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Quiz cannot be submitted in its current state."})
 			return
 		}
 		c.JSON(http.StatusOK, result)
 	case "prophet":
 		result, err := h.svc.SubmitProphetQuiz(c.Request.Context(), id, familyID, input)
 		if err != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "unable to submit quiz"})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Quiz cannot be submitted in its current state."})
 			return
 		}
 		c.JSON(http.StatusOK, result)
 	case "quran":
 		result, err := h.svc.SubmitQuranQuiz(c.Request.Context(), id, familyID, input)
 		if err != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "unable to submit quiz"})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Quiz cannot be submitted in its current state."})
+			return
+		}
+		c.JSON(http.StatusOK, result)
+	case "topic":
+		result, err := h.svc.SubmitTopicQuiz(c.Request.Context(), id, familyID, input)
+		if err != nil {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Quiz cannot be submitted in its current state."})
 			return
 		}
 		c.JSON(http.StatusOK, result)
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid quiz type"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Quiz type is invalid. Allowed values: hadith, prophet, quran, topic."})
 	}
 }

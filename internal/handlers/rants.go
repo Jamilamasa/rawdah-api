@@ -19,13 +19,13 @@ func NewRantHandler(svc *services.RantService) *RantHandler {
 func (h *RantHandler) List(c *gin.Context) {
 	role := c.GetString(string(models.ContextKeyRole))
 	if role != "child" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "You do not have permission to perform this action."})
 		return
 	}
 	userID := c.GetString(string(models.ContextKeyUserID))
 	rants, err := h.svc.List(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"rants": rants})
@@ -34,7 +34,7 @@ func (h *RantHandler) List(c *gin.Context) {
 func (h *RantHandler) Create(c *gin.Context) {
 	role := c.GetString(string(models.ContextKeyRole))
 	if role != "child" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "You do not have permission to perform this action."})
 		return
 	}
 	userID := c.GetString(string(models.ContextKeyUserID))
@@ -56,7 +56,7 @@ func (h *RantHandler) Create(c *gin.Context) {
 		Password: req.Password,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, rant)
@@ -65,7 +65,7 @@ func (h *RantHandler) Create(c *gin.Context) {
 func (h *RantHandler) Get(c *gin.Context) {
 	role := c.GetString(string(models.ContextKeyRole))
 	if role != "child" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "You do not have permission to perform this action."})
 		return
 	}
 	userID := c.GetString(string(models.ContextKeyUserID))
@@ -74,7 +74,7 @@ func (h *RantHandler) Get(c *gin.Context) {
 
 	rant, err := h.svc.Get(c.Request.Context(), id, userID, password)
 	if err == services.ErrRantWrongPassword {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "incorrect password"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "The provided rant password is incorrect."})
 		return
 	}
 	if err == services.ErrRantLocked {
@@ -89,7 +89,7 @@ func (h *RantHandler) Get(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 		return
 	}
 	c.JSON(http.StatusOK, rant)
@@ -98,7 +98,7 @@ func (h *RantHandler) Get(c *gin.Context) {
 func (h *RantHandler) Update(c *gin.Context) {
 	role := c.GetString(string(models.ContextKeyRole))
 	if role != "child" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "You do not have permission to perform this action."})
 		return
 	}
 	userID := c.GetString(string(models.ContextKeyUserID))
@@ -120,7 +120,7 @@ func (h *RantHandler) Update(c *gin.Context) {
 		Password: req.Password,
 	})
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 		return
 	}
 	c.JSON(http.StatusOK, rant)
@@ -129,14 +129,14 @@ func (h *RantHandler) Update(c *gin.Context) {
 func (h *RantHandler) Delete(c *gin.Context) {
 	role := c.GetString(string(models.ContextKeyRole))
 	if role != "child" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "You do not have permission to perform this action."})
 		return
 	}
 	userID := c.GetString(string(models.ContextKeyUserID))
 	id := c.Param("id")
 
 	if err := h.svc.Delete(c.Request.Context(), id, userID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})

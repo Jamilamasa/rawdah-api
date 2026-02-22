@@ -21,7 +21,7 @@ func (h *QuranHandler) ListVerses(c *gin.Context) {
 
 	verses, err := h.repo.ListVerses(c.Request.Context(), topic, difficulty)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"verses": verses})
@@ -31,7 +31,7 @@ func (h *QuranHandler) GetVerse(c *gin.Context) {
 	id := c.Param("id")
 	verse, err := h.repo.GetVerseByID(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})
 		return
 	}
 	c.JSON(http.StatusOK, verse)

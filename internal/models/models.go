@@ -76,6 +76,24 @@ type Task struct {
 	CreatedAt   time.Time  `db:"created_at"   json:"created_at"`
 }
 
+type DueReward struct {
+	TaskID            uuid.UUID  `db:"task_id"             json:"task_id"`
+	TaskTitle         string     `db:"task_title"          json:"task_title"`
+	TaskDescription   *string    `db:"task_description"    json:"task_description"`
+	TaskStatus        string     `db:"task_status"         json:"task_status"`
+	TaskDueDate       *time.Time `db:"task_due_date"       json:"task_due_date"`
+	TaskCompletedAt   *time.Time `db:"task_completed_at"   json:"task_completed_at"`
+	TaskCreatedAt     time.Time  `db:"task_created_at"     json:"task_created_at"`
+	ChildID           uuid.UUID  `db:"child_id"            json:"child_id"`
+	ChildName         string     `db:"child_name"          json:"child_name"`
+	RewardID          uuid.UUID  `db:"reward_id"           json:"reward_id"`
+	RewardTitle       string     `db:"reward_title"        json:"reward_title"`
+	RewardDescription *string    `db:"reward_description"  json:"reward_description"`
+	RewardValue       float64    `db:"reward_value"        json:"reward_value"`
+	RewardType        string     `db:"reward_type"         json:"reward_type"`
+	RewardIcon        *string    `db:"reward_icon"         json:"reward_icon"`
+}
+
 type Hadith struct {
 	ID         uuid.UUID `db:"id"         json:"id"`
 	TextEn     string    `db:"text_en"    json:"text_en"`
@@ -120,6 +138,11 @@ type QuizQuestion struct {
 	Options       map[string]string `json:"options"`
 	CorrectAnswer string            `json:"correct_answer"`
 	Explanation   string            `json:"explanation"`
+}
+
+type Flashcard struct {
+	Front string `json:"front"`
+	Back  string `json:"back"`
 }
 
 type QuizAnswer struct {
@@ -184,6 +207,24 @@ type QuranQuiz struct {
 	Status      string         `db:"status"      json:"status"`
 	CompletedAt *time.Time     `db:"completed_at" json:"completed_at"`
 	CreatedAt   time.Time      `db:"created_at"  json:"created_at"`
+}
+
+type TopicQuiz struct {
+	ID            uuid.UUID      `db:"id"             json:"id"`
+	FamilyID      uuid.UUID      `db:"family_id"      json:"family_id"`
+	AssignedTo    uuid.UUID      `db:"assigned_to"    json:"assigned_to"`
+	AssignedBy    uuid.UUID      `db:"assigned_by"    json:"assigned_by"`
+	Category      string         `db:"category"       json:"category"`
+	Topic         string         `db:"topic"          json:"topic"`
+	LessonContent string         `db:"lesson_content" json:"lesson_content"`
+	Flashcards    []Flashcard    `db:"flashcards"     json:"flashcards"`
+	Questions     []QuizQuestion `db:"questions"      json:"questions"`
+	Answers       []QuizAnswer   `db:"answers"        json:"answers,omitempty"`
+	Score         *int           `db:"score"          json:"score"`
+	XPAwarded     int            `db:"xp_awarded"     json:"xp_awarded"`
+	Status        string         `db:"status"         json:"status"`
+	CompletedAt   *time.Time     `db:"completed_at"   json:"completed_at"`
+	CreatedAt     time.Time      `db:"created_at"     json:"created_at"`
 }
 
 type Message struct {
@@ -303,6 +344,18 @@ type LearnProgress struct {
 	ContentID   uuid.UUID  `db:"content_id"   json:"content_id"`
 	UserID      uuid.UUID  `db:"user_id"      json:"user_id"`
 	CompletedAt *time.Time `db:"completed_at" json:"completed_at"`
+}
+
+type RecurringTask struct {
+	ID          uuid.UUID  `db:"id"          json:"id"`
+	FamilyID    uuid.UUID  `db:"family_id"   json:"family_id"`
+	Title       string     `db:"title"       json:"title"`
+	Description *string    `db:"description" json:"description"`
+	AssignedTo  uuid.UUID  `db:"assigned_to" json:"assigned_to"`
+	CreatedBy   uuid.UUID  `db:"created_by"  json:"created_by"`
+	RewardID    *uuid.UUID `db:"reward_id"   json:"reward_id"`
+	IsActive    bool       `db:"is_active"   json:"is_active"`
+	CreatedAt   time.Time  `db:"created_at"  json:"created_at"`
 }
 
 // JWT context keys
