@@ -63,6 +63,7 @@ var internalErrorMessages = map[string]string{
 	"POST /v1/quizzes/prophet":                     "Unable to assign prophet quiz at the moment.",
 	"POST /v1/quizzes/quran":                       "Unable to assign Quran quiz at the moment.",
 	"POST /v1/quizzes/topic":                       "Unable to assign topic quiz at the moment.",
+	"POST /v1/ai/ask":                              "Unable to process AI question at the moment.",
 	"POST /v1/quizzes/:type/:id/submit":            "Unable to submit quiz at the moment.",
 	"GET /v1/lessons/quran":                        "Unable to load Quran lessons at the moment.",
 	"POST /v1/lessons/quran":                       "Unable to create Quran lesson at the moment.",

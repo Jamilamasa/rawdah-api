@@ -3,6 +3,7 @@ package ai
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/rawdah/rawdah-api/internal/config"
@@ -31,9 +32,9 @@ type openRouterResponseFormat struct {
 }
 
 type openRouterRequest struct {
-	Model          string                   `json:"model"`
-	Messages       []openRouterMessage      `json:"messages"`
-	ResponseFormat openRouterResponseFormat `json:"response_format"`
+	Model          string                    `json:"model"`
+	Messages       []openRouterMessage       `json:"messages"`
+	ResponseFormat *openRouterResponseFormat `json:"response_format,omitempty"`
 }
 
 type openRouterChoice struct {
@@ -102,11 +103,22 @@ func (c *Client) GenerateTopicPack(prompt string, minQuestionCount int) (*TopicP
 	return result, nil
 }
 
+func (c *Client) AskQuestion(systemPrompt, question string) (string, error) {
+	answer, err := c.callTextModel(c.cfg.OpenRouterModel, systemPrompt, question)
+	if err != nil {
+		answer, err = c.callTextModel(c.cfg.OpenRouterFallbackModel, systemPrompt, question)
+		if err != nil {
+			return "", fmt.Errorf("both AI models failed: %w", err)
+		}
+	}
+	return answer, nil
+}
+
 func (c *Client) callHadithModel(model, prompt string) (*HadithQuizResult, error) {
 	req := openRouterRequest{
 		Model:          model,
 		Messages:       []openRouterMessage{{Role: "user", Content: prompt}},
-		ResponseFormat: openRouterResponseFormat{Type: "json_object"},
+		ResponseFormat: &openRouterResponseFormat{Type: "json_object"},
 	}
 
 	var resp openRouterResponse
@@ -156,7 +168,7 @@ func (c *Client) callModel(model, prompt string) ([]models.QuizQuestion, error) 
 		Messages: []openRouterMessage{
 			{Role: "user", Content: prompt},
 		},
-		ResponseFormat: openRouterResponseFormat{Type: "json_object"},
+		ResponseFormat: &openRouterResponseFormat{Type: "json_object"},
 	}
 
 	var resp openRouterResponse
@@ -200,7 +212,7 @@ func (c *Client) callTopicModel(model, prompt string, minQuestionCount int) (*To
 	req := openRouterRequest{
 		Model:          model,
 		Messages:       []openRouterMessage{{Role: "user", Content: prompt}},
-		ResponseFormat: openRouterResponseFormat{Type: "json_object"},
+		ResponseFormat: &openRouterResponseFormat{Type: "json_object"},
 	}
 
 	var resp openRouterResponse
@@ -222,8 +234,8 @@ func (c *Client) callTopicModel(model, prompt string, minQuestionCount int) (*To
 
 	jsonStr := extractJSONObject(resp.Choices[0].Message.Content)
 	var wrapper struct {
-		LessonContent string            `json:"lesson_content"`
-		Flashcards    []models.Flashcard `json:"flashcards"`
+		LessonContent string                `json:"lesson_content"`
+		Flashcards    []models.Flashcard    `json:"flashcards"`
 		Questions     []models.QuizQuestion `json:"questions"`
 	}
 	if err := json.Unmarshal([]byte(jsonStr), &wrapper); err != nil {
@@ -296,4 +308,38 @@ func validateQuestions(questions []models.QuizQuestion) error {
 		}
 	}
 	return nil
+}
+
+func (c *Client) callTextModel(model, systemPrompt, question string) (string, error) {
+	req := openRouterRequest{
+		Model: model,
+		Messages: []openRouterMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: question},
+		},
+	}
+
+	var resp openRouterResponse
+	httpResp, err := c.resty.R().
+		SetHeader("Authorization", "Bearer "+c.cfg.OpenRouterAPIKey).
+		SetHeader("Content-Type", "application/json").
+		SetBody(req).
+		SetResult(&resp).
+		Post("/chat/completions")
+	if err != nil {
+		return "", fmt.Errorf("http error: %w", err)
+	}
+	if httpResp.StatusCode() >= 400 {
+		return "", fmt.Errorf("API error %d: %s", httpResp.StatusCode(), httpResp.String())
+	}
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("no choices in response")
+	}
+
+	answer := strings.TrimSpace(resp.Choices[0].Message.Content)
+	if answer == "" {
+		return "", fmt.Errorf("empty answer from model")
+	}
+
+	return answer, nil
 }

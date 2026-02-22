@@ -110,6 +110,7 @@ func main() {
 	taskSvc := services.NewTaskService(taskRepo, recurringTaskRepo, familyRepo, notifRepo, xpSvc, m, hub)
 	rewardSvc := services.NewRewardService(rewardRepo)
 	quizSvc := services.NewQuizService(quizRepo, hadithRepo, prophetRepo, quranRepo, familyRepo, notifRepo, xpSvc, aiClient, m, hub)
+	assistantSvc := services.NewAssistantService(aiClient, familyRepo)
 	lessonSvc := services.NewLessonService(lessonRepo, quizRepo, quranRepo, familyRepo, xpSvc, hub)
 	msgSvc := services.NewMessageService(msgRepo, familyRepo, xpSvc, m, hub)
 	rantSvc := services.NewRantService(rantRepo)
@@ -128,6 +129,7 @@ func main() {
 	prophetH := handlers.NewProphetHandler(prophetRepo)
 	quranH := handlers.NewQuranHandler(quranRepo)
 	quizH := handlers.NewQuizHandler(quizSvc)
+	assistantH := handlers.NewAssistantHandler(assistantSvc)
 	lessonH := handlers.NewLessonHandler(lessonSvc)
 	msgH := handlers.NewMessageHandler(msgSvc)
 	rantH := handlers.NewRantHandler(rantSvc)
@@ -245,6 +247,7 @@ func main() {
 		v1.GET("/quizzes/:type/:id", adultCanManageQuizzes, quizH.Get)
 		v1.POST("/quizzes/:type/:id/start", middleware.RoleGuard("child"), quizH.Start)
 		v1.POST("/quizzes/:type/:id/submit", middleware.RoleGuard("child"), quizH.Submit)
+		v1.POST("/ai/ask", rateLimiter(30, time.Minute), assistantH.Ask)
 
 		// Quran lessons
 		v1.GET("/lessons/quran", middleware.RoleGuard("parent", "adult_relative"), adultCanManageLearn, lessonH.ListLessons)
