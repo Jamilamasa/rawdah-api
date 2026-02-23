@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
 	"strings"
 
 	"github.com/google/uuid"
@@ -66,11 +67,14 @@ func (s *RequestService) Create(ctx context.Context, input CreateRequestInput) (
 		return nil, err
 	}
 
-	// Notify family members (parents)
+	// Notify family members in realtime.
 	s.hub.Broadcast(ws.BroadcastMsg{
 		Room:  fmt.Sprintf("family:%s", input.FamilyID.String()),
 		Event: ws.WSEvent{Type: "request.new", Payload: req},
 	})
+
+	// Async email notification to adults who can act on the request.
+	go s.sendCreateEmails(req)
 
 	return req, nil
 }
@@ -127,4 +131,64 @@ func (s *RequestService) Respond(ctx context.Context, input RespondInput) (*mode
 	}()
 
 	return req, nil
+}
+
+func (s *RequestService) sendCreateEmails(req *models.Request) {
+	if req == nil || s.mailer == nil {
+		return
+	}
+
+	familyID := req.FamilyID.String()
+
+	requesterName := "A child"
+	if requester, err := s.familyRepo.GetMemberByID(context.Background(), req.RequesterID.String(), familyID); err == nil {
+		if trimmed := strings.TrimSpace(requester.Name); trimmed != "" {
+			requesterName = trimmed
+		}
+	}
+
+	recipients := make([]*models.User, 0, 4)
+	if req.TargetID != nil {
+		target, err := s.familyRepo.GetMemberByID(context.Background(), req.TargetID.String(), familyID)
+		if err == nil {
+			recipients = append(recipients, target)
+		}
+	} else {
+		members, err := s.familyRepo.ListMembers(context.Background(), familyID)
+		if err == nil {
+			recipients = append(recipients, members...)
+		}
+	}
+
+	if len(recipients) == 0 {
+		return
+	}
+
+	safeTitle := html.EscapeString(req.Title)
+	safeRequesterName := html.EscapeString(requesterName)
+	subject := fmt.Sprintf("New request from %s", requesterName)
+	baseBody := fmt.Sprintf(`<p><strong>%s</strong> sent a new request: "<strong>%s</strong>".</p>`, safeRequesterName, safeTitle)
+	if req.Description != nil {
+		if description := strings.TrimSpace(*req.Description); description != "" {
+			baseBody += fmt.Sprintf("<p>Details: %s</p>", html.EscapeString(description))
+		}
+	}
+
+	seen := make(map[string]struct{}, len(recipients))
+	for _, member := range recipients {
+		if member == nil || !member.IsActive || member.Role == "child" || member.Email == nil {
+			continue
+		}
+		email := strings.TrimSpace(*member.Email)
+		if email == "" {
+			continue
+		}
+		if _, exists := seen[email]; exists {
+			continue
+		}
+		seen[email] = struct{}{}
+
+		htmlBody := mailer.BuildEmail("New Request", baseBody, "Review Request", "https://app.rawdah.app/requests", "")
+		_ = s.mailer.Send(mailer.BrevoContact{Name: member.Name, Email: email}, subject, htmlBody)
+	}
 }
