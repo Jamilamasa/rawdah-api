@@ -168,7 +168,7 @@ func (s *AuthService) ChildSignin(ctx context.Context, input ChildSigninInput) (
 	input.FamilySlug = strings.TrimSpace(strings.ToLower(input.FamilySlug))
 	input.Username = strings.TrimSpace(input.Username)
 
-	family, err := s.familyRepo.GetFamilyBySlug(ctx, input.FamilySlug)
+	family, err := s.familyRepo.GetFamilyBySlugOrName(ctx, input.FamilySlug)
 	if err != nil {
 		return nil, ErrInvalidCredentials
 	}

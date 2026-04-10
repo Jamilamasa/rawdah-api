@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -48,6 +50,39 @@ func (r *FamilyRepo) GetFamilyBySlug(ctx context.Context, slug string) (*models.
 		return nil, err
 	}
 	return &f, nil
+}
+
+// GetFamilyBySlugOrName resolves a family by slug first, then by case-insensitive name.
+// Name lookup is accepted for child login convenience; when multiple families share
+// the same name, this returns an error so callers can safely require the slug.
+func (r *FamilyRepo) GetFamilyBySlugOrName(ctx context.Context, identifier string) (*models.Family, error) {
+	family, err := r.GetFamilyBySlug(ctx, identifier)
+	if err == nil {
+		return family, nil
+	}
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	var matches []models.Family
+	if err := r.db.SelectContext(ctx, &matches,
+		`SELECT id, name, slug, logo_url, plan, created_at
+		 FROM families
+		 WHERE LOWER(name) = LOWER($1)
+		 LIMIT 2`,
+		identifier,
+	); err != nil {
+		return nil, err
+	}
+
+	if len(matches) == 0 {
+		return nil, sql.ErrNoRows
+	}
+	if len(matches) > 1 {
+		return nil, fmt.Errorf("multiple families matched this name")
+	}
+
+	return &matches[0], nil
 }
 
 func (r *FamilyRepo) UpdateFamily(ctx context.Context, id, familyID string, name string, logoURL *string) (*models.Family, error) {
