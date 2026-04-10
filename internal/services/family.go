@@ -208,6 +208,32 @@ func (s *FamilyService) UpdateMember(ctx context.Context, memberID, familyID str
 		return nil, ErrMemberNotFound
 	}
 
+	if passwordRaw, ok := updates["password"]; ok && passwordRaw != nil {
+		passwordPtr, ok := passwordRaw.(*string)
+		if !ok || passwordPtr == nil {
+			return nil, ErrInvalidMemberData
+		}
+		password := strings.TrimSpace(*passwordPtr)
+		if password == "" {
+			return nil, ErrInvalidMemberData
+		}
+
+		minLen := 8
+		if member.Role == "child" {
+			minLen = 6
+		}
+		if len(password) < minLen {
+			return nil, ErrPasswordTooShort
+		}
+
+		passwordHash, err := auth.HashPassword(password)
+		if err != nil {
+			return nil, err
+		}
+		updates["password_hash"] = passwordHash
+	}
+	delete(updates, "password")
+
 	if childAgeRaw, ok := updates["child_age"]; ok && childAgeRaw != nil {
 		childAgePtr, ok := childAgeRaw.(*int)
 		if !ok || childAgePtr == nil || member.Role != "child" {

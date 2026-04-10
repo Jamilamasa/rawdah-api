@@ -143,6 +143,7 @@ func (h *FamilyHandler) UpdateMember(c *gin.Context) {
 		GameLimitMinutes *int       `json:"game_limit_minutes"`
 		ChildAge         *int       `json:"child_age"`
 		DateOfBirth      *time.Time `json:"date_of_birth"`
+		Password         *string    `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "The request body is invalid. Please verify required fields and value formats."})
@@ -155,12 +156,17 @@ func (h *FamilyHandler) UpdateMember(c *gin.Context) {
 		"game_limit_minutes": req.GameLimitMinutes,
 		"child_age":          req.ChildAge,
 		"date_of_birth":      req.DateOfBirth,
+		"password":           req.Password,
 	}
 
 	member, err := h.svc.UpdateMember(c.Request.Context(), memberID, familyID, updates)
 	if err != nil {
 		if err == services.ErrInvalidMemberData {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "The member data is invalid."})
+			return
+		}
+		if err == services.ErrPasswordTooShort {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "The requested resource was not found."})

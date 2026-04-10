@@ -142,11 +142,12 @@ func (r *FamilyRepo) UpdateMember(ctx context.Context, id, familyID string, upda
 		 SET name = COALESCE($1, name),
 		     theme = COALESCE($2, theme),
 		     game_limit_minutes = COALESCE($3, game_limit_minutes),
-		     date_of_birth = COALESCE($4, date_of_birth)
-		 WHERE id = $5 AND family_id = $6
+		     date_of_birth = COALESCE($4, date_of_birth),
+		     password_hash = COALESCE($5, password_hash)
+		 WHERE id = $6 AND family_id = $7
 		 RETURNING id, family_id, role, name, username, email, password_hash, avatar_url,
 		           theme, date_of_birth, game_limit_minutes, is_active, created_by, last_login_at, created_at`,
-		updates["name"], updates["theme"], updates["game_limit_minutes"], updates["date_of_birth"],
+		updates["name"], updates["theme"], updates["game_limit_minutes"], updates["date_of_birth"], updates["password_hash"],
 		id, familyID,
 	)
 	if err != nil {
