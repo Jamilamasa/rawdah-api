@@ -39,6 +39,9 @@ type Config struct {
 	OpenRouterModel         string
 	OpenRouterFallbackModel string
 
+	DuaCompanionBaseURL string
+	DuaCompanionTimeout time.Duration
+
 	VAPIDPublicKey  string
 	VAPIDPrivateKey string
 	VAPIDSubject    string
@@ -61,6 +64,8 @@ func Load() (*Config, error) {
 	viper.SetDefault("CHILD_TOKEN_TTL", "4h")
 	viper.SetDefault("OPENROUTER_MODEL", "google/gemma-2-9b-it")
 	viper.SetDefault("OPENROUTER_FALLBACK_MODEL", "mistralai/mistral-7b-instruct")
+	viper.SetDefault("DUA_COMPANION_BASE_URL", "https://dua-companion-api.onrender.com")
+	viper.SetDefault("DUA_COMPANION_TIMEOUT", "20s")
 	viper.SetDefault("PRESIGN_EXPIRES_SECONDS", 600)
 	viper.SetDefault("AUTO_MIGRATE", true)
 	viper.SetDefault("ADULT_PLATFORM_URL", "https://app.rawdah.app")
@@ -75,6 +80,10 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	childTTL, err := time.ParseDuration(viper.GetString("CHILD_TOKEN_TTL"))
+	if err != nil {
+		return nil, err
+	}
+	duaCompanionTimeout, err := time.ParseDuration(viper.GetString("DUA_COMPANION_TIMEOUT"))
 	if err != nil {
 		return nil, err
 	}
@@ -119,6 +128,8 @@ func Load() (*Config, error) {
 		OpenRouterAPIKey:        viper.GetString("OPENROUTER_API_KEY"),
 		OpenRouterModel:         viper.GetString("OPENROUTER_MODEL"),
 		OpenRouterFallbackModel: viper.GetString("OPENROUTER_FALLBACK_MODEL"),
+		DuaCompanionBaseURL:     viper.GetString("DUA_COMPANION_BASE_URL"),
+		DuaCompanionTimeout:     duaCompanionTimeout,
 
 		VAPIDPublicKey:  viper.GetString("VAPID_PUBLIC_KEY"),
 		VAPIDPrivateKey: viper.GetString("VAPID_PRIVATE_KEY"),

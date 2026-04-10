@@ -84,6 +84,7 @@ func main() {
 	pushRepo := repository.NewPushRepo(db)
 	xpRepo := repository.NewXPRepo(db)
 	recurringTaskRepo := repository.NewRecurringTaskRepo(db)
+	duaHistoryRepo := repository.NewDuaHistoryRepo(db)
 
 	// Setup WebSocket hub
 	hub := ws.NewHub()
@@ -111,6 +112,7 @@ func main() {
 	rewardSvc := services.NewRewardService(rewardRepo)
 	quizSvc := services.NewQuizService(quizRepo, hadithRepo, prophetRepo, quranRepo, familyRepo, notifRepo, xpSvc, aiClient, m, hub)
 	assistantSvc := services.NewAssistantService(aiClient, familyRepo)
+	duaSvc := services.NewDuaService(cfg.DuaCompanionBaseURL, cfg.DuaCompanionTimeout, duaHistoryRepo)
 	lessonSvc := services.NewLessonService(lessonRepo, quizRepo, quranRepo, familyRepo, xpSvc, hub)
 	msgSvc := services.NewMessageService(msgRepo, familyRepo, xpSvc, m, hub)
 	rantSvc := services.NewRantService(rantRepo)
@@ -130,6 +132,7 @@ func main() {
 	quranH := handlers.NewQuranHandler(quranRepo)
 	quizH := handlers.NewQuizHandler(quizSvc)
 	assistantH := handlers.NewAssistantHandler(assistantSvc)
+	duaH := handlers.NewDuaHandler(duaSvc)
 	lessonH := handlers.NewLessonHandler(lessonSvc)
 	msgH := handlers.NewMessageHandler(msgSvc)
 	rantH := handlers.NewRantHandler(rantSvc)
@@ -248,6 +251,9 @@ func main() {
 		v1.POST("/quizzes/:type/:id/start", middleware.RoleGuard("child"), quizH.Start)
 		v1.POST("/quizzes/:type/:id/submit", middleware.RoleGuard("child"), quizH.Submit)
 		v1.POST("/ai/ask", rateLimiter(30, time.Minute), assistantH.Ask)
+		v1.POST("/dua/generate", rateLimiter(20, time.Minute), duaH.Generate)
+		v1.GET("/dua/history", duaH.ListHistory)
+		v1.GET("/dua/history/:id", duaH.GetHistory)
 
 		// Quran lessons
 		v1.GET("/lessons/quran", middleware.RoleGuard("parent", "adult_relative"), adultCanManageLearn, lessonH.ListLessons)

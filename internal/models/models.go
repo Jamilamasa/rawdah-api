@@ -283,6 +283,30 @@ type Notification struct {
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 }
 
+type DuaSelectedName struct {
+	Transliteration string `json:"transliteration"`
+	DuaForm         string `json:"dua_form"`
+	Arabic          string `json:"arabic"`
+	Meaning         string `json:"meaning"`
+	Explanation     string `json:"explanation"`
+}
+
+type DuaHistory struct {
+	ID            uuid.UUID         `db:"id"             json:"id"`
+	FamilyID      uuid.UUID         `db:"family_id"      json:"family_id"`
+	UserID        uuid.UUID         `db:"user_id"        json:"user_id"`
+	AskingFor     string            `db:"asking_for"     json:"asking_for"`
+	HeavyOnHeart  string            `db:"heavy_on_heart" json:"heavy_on_heart"`
+	AfraidOf      string            `db:"afraid_of"      json:"afraid_of"`
+	IfAnswered    string            `db:"if_answered"    json:"if_answered"`
+	OutputStyle   string            `db:"output_style"   json:"output_style"`
+	Depth         string            `db:"depth"          json:"depth"`
+	Tone          string            `db:"tone"           json:"tone"`
+	SelectedNames []DuaSelectedName `db:"selected_names" json:"selected_names"`
+	DuaText       string            `db:"dua_text"       json:"dua_text"`
+	CreatedAt     time.Time         `db:"created_at"     json:"created_at"`
+}
+
 type PushSubscription struct {
 	ID        uuid.UUID `db:"id"         json:"id"`
 	UserID    uuid.UUID `db:"user_id"    json:"user_id"`
